@@ -138,8 +138,12 @@ def main():
     # only audio - the folder also holds a README, and handing that to the
     # transcriber would burn a call and produce nonsense
     AUDIO_EXT = (".webm", ".mp4", ".m4a", ".mp3", ".ogg", ".wav", ".flac", ".mpga", ".mpeg")
+    # A .txt is treated as something already said in writing: it skips the
+    # transcriber and goes straight to the rewrite and the voice. Useful when you
+    # would rather type than talk, and the only way to make a note and its
+    # recording match without dictating it.
     jobs = sorted(f for f in os.listdir(INBOX)
-                  if not f.startswith(".") and f.lower().endswith(AUDIO_EXT))
+                  if not f.startswith(".") and f.lower().endswith(AUDIO_EXT + (".txt",)))
     if not jobs:
         print("Nothing waiting."); return
     print("%d recording(s) waiting. Models: %s / %s / %s"
@@ -153,10 +157,16 @@ def main():
         vid = stem[:-6] if want_audio else stem
         print("\n== %s (audio: %s)" % (vid, want_audio))
         try:
-            said = transcribe(path, cfg["transcribe"])
-            if not said:
-                raise RuntimeError("nothing was heard in the recording")
-            print("   heard: %s" % said[:110])
+            if name.lower().endswith(".txt"):
+                said = open(path, encoding="utf-8").read().strip()
+                if not said:
+                    raise RuntimeError("the text file was empty")
+                print("   read : %s" % said[:110])
+            else:
+                said = transcribe(path, cfg["transcribe"])
+                if not said:
+                    raise RuntimeError("nothing was heard in the recording")
+                print("   heard: %s" % said[:110])
             note = polish(said, cfg)
             print("   note : %s" % note[:110])
             firebase(cfg, "notes", vid, note)

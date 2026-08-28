@@ -103,6 +103,15 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
   background:rgba(255,255,255,.05);border:1px solid var(--line2)}
 .notewrap textarea::placeholder{color:var(--faint)}
 .notewrap textarea:focus{outline:none;border-color:rgba(49,224,192,.55);background:rgba(49,224,192,.07)}
+.notewrap .hear{position:absolute;right:46px;bottom:8px;width:32px;height:32px;border-radius:10px;
+  display:grid;place-items:center;cursor:pointer;
+  border:1px solid rgba(255,200,97,.45);background:rgba(255,200,97,.14);color:var(--gold)}
+.notewrap .hear[hidden]{display:none}
+.notewrap .hear svg{width:14px;height:14px;fill:currentColor;stroke:none}
+.notewrap .hear.on{background:var(--gold);color:#2a1d02;border-color:transparent}
+/* the tick only exists while there is something unsaved, so it can never sit on
+   top of the recording bar the way it used to */
+.notewrap .sv[hidden]{display:none}
 .notewrap .sv{position:absolute;right:8px;bottom:8px;width:32px;height:32px;border-radius:10px;
   display:grid;place-items:center;cursor:pointer;
   border:1px solid rgba(49,224,192,.4);background:rgba(49,224,192,.13);color:var(--ok)}
@@ -343,6 +352,9 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
         </button>
         <button class="mic" data-mic type="button" title="Talk instead of typing" aria-label="Record a voice note">
           <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+        </button>
+        <button class="hear" data-hear type="button" hidden title="Hear the spoken version" aria-label="Hear it">
+          <svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg>
         </button>
         <div class="recbar" data-recbar hidden>
           <span class="dot"></span>
@@ -972,6 +984,9 @@ function noteTools(box, getClip){
               || document.getElementById("aiStat");
 
   var rec=null, chunks=[], stream=null, ac=null, tick=null, started=0, discard=false, watching=null;
+  var hearBt = box.querySelector("[data-hear]");
+  var saved = "";        // what the note said when it was last put on screen
+  var player = null;     // for playing the spoken version back
 
   function say(msg, cls){
     if(!statusEl) return;
@@ -985,7 +1000,12 @@ function noteTools(box, getClip){
   function showBar(on){
     bar.hidden = !on;
     micBtn.classList.toggle("rec", on);
-    note.disabled = on;
+    // the tick and the play button live where the bar goes, so they step aside
+    saveBt.hidden = on || !dirty();
+    hearBt.hidden = on || hearBt.hidden;
+    if(!on) paintHear();
+    note.readOnly = on;      // readOnly, not disabled: disabling steals focus and
+                             // the blur that follows used to trigger a save
   }
   function pickMime(){
     var want=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg"];
@@ -994,29 +1014,55 @@ function noteTools(box, getClip){
     return "";
   }
 
+  function clean(v){ return String(v||"").trim().replace(/\s+/g," ").replace(/\|/g,"/"); }
+  function dirty(){ return clean(note.value) !== saved; }
+  function paintDirty(){ saveBt.hidden = !dirty() || !note.value.trim().length && !saved.length; }
+
+  /* Saving used to run on every blur. That is how a note written by the workflow
+     got wiped: the box was still empty, the box lost focus, and an empty box was
+     dutifully saved over the top of it. Nothing is written unless the text on
+     screen actually differs from the text this box was given. */
   function save(){
     var clip = getClip(); if(!clip) return;
-    var t = note.value.trim().replace(/\s+/g," ").replace(/\|/g,"/");
+    if(!dirty()){ paintDirty(); return; }
+    var t = clean(note.value);
     if(t) NOTES[clip.id]=t; else delete NOTES[clip.id];
+    saved = t;
     saveLocal(); pushSide("notes", clip.id, t || null);
     saveBt.classList.add("saved");
-    setTimeout(function(){ saveBt.classList.remove("saved"); }, 1100);
+    setTimeout(function(){ saveBt.classList.remove("saved"); paintDirty(); }, 900);
     if(lists.classList.contains("open") && !openRow) paintRows();
     if(cur && clip.id===cur.id && box!==deckBox) paintNote();
+    say("Saved.", "good");
   }
   saveBt.addEventListener("click", function(e){ e.stopPropagation(); save(); });
   note.addEventListener("blur", save);
   var typeTimer=null;
-  note.addEventListener("input", function(){ clearTimeout(typeTimer); typeTimer=setTimeout(save,1200); });
+  note.addEventListener("input", function(){
+    paintDirty();
+    clearTimeout(typeTimer); typeTimer=setTimeout(save,1200);
+  });
   note.addEventListener("click", function(e){ e.stopPropagation(); });
   note.addEventListener("keydown", function(e){
     if(e.key==="Enter" && (e.ctrlKey||e.metaKey)){ e.preventDefault(); note.blur(); }
   });
 
   /* ---- recording, with something to look at while it happens ---- */
+  /* Recording over the top of a playing clip records the clip. Stop it first -
+     in the deck that is the transport, in a row it is the row's own iframe. */
+  function pauseClip(){
+    try{ if(box===deckBox && TR && TR.cmd) TR.cmd("pauseVideo"); }catch(e){}
+    try{
+      var host = box.closest(".row2");
+      var f = host && host.querySelector("iframe");
+      if(f) f.contentWindow.postMessage(JSON.stringify(
+        {event:"command",func:"pauseVideo",args:[],id:1,channel:"widget"}),"*");
+    }catch(e){}
+  }
   function startRec(){
     var clip=getClip();
     if(!clip){ say("Open a clip first.", "bad"); return; }
+    pauseClip();
     if(!token()){
       say("This needs the GitHub token from Export / publish - that is what sends the recording.", "bad");
       return;
@@ -1124,22 +1170,50 @@ function noteTools(box, getClip){
       n++;
       if(n > 40){
         clearInterval(poll); micBtn.classList.remove("busy");
-        say("Taking longer than usual. Check the Actions tab on GitHub.", "bad"); return;
+        say("No answer after three minutes. Look at the Actions tab on GitHub - the run "
+            + "itself will say what went wrong.", "bad"); return;
       }
+      if(n === 6) say("Still working\u2026 the first run of the day takes longer.");
       pullAdded(function(){
         if(NOTES[id] && NOTES[id] !== before){
           clearInterval(poll); micBtn.classList.remove("busy");
           var clip=getClip();
-          if(clip && clip.id===id) note.value = NOTES[id];
-          if(cur && cur.id===id) paintNote();
+          if(clip && clip.id===id){
+            saved = clean(NOTES[id]);      // this is now the baseline, not an edit
+            note.value = saved;
+            paintDirty(); paintHear();
+          }
+          if(cur && cur.id===id && box!==deckBox) paintNote();
           if(lists.classList.contains("open") && !openRow) paintRows();
-          say("Written up" + (VOICES[id] ? " and recorded." : "."), "good");
+          say(VOICES[id] ? "Written up. Press \u25B6 to hear it." : "Written up.", "good");
         }
       });
     }, 5000);
   }
 
-  return { refresh:function(){ var c=getClip(); note.value = c ? (NOTES[c.id]||"") : ""; note.disabled = !c; } };
+  function paintHear(){
+    var c=getClip();
+    hearBt.hidden = !(c && VOICES[c.id]);
+  }
+  hearBt.addEventListener("click", function(e){
+    e.stopPropagation();
+    var c=getClip(); if(!c) return;
+    if(player && !player.paused){ player.pause(); hearBt.classList.remove("on"); return; }
+    pauseClip();
+    if(!player){ player=new Audio(); player.addEventListener("ended",function(){ hearBt.classList.remove("on"); }); }
+    // straight from the repository, past any cached copy of an older take
+    player.src = "../audio/" + c.id + ".mp3?t=" + Date.now();
+    player.play().then(function(){ hearBt.classList.add("on"); },
+                       function(){ say("The spoken file is not on the site yet - give GitHub a minute.", "bad"); });
+  });
+
+  return { refresh:function(){
+    var c=getClip();
+    saved = c ? clean(NOTES[c.id]||"") : "";
+    note.value = saved;
+    note.disabled = !c;
+    paintDirty(); paintHear();
+  } };
 }
 
 var deckBox = document.getElementById("deckTools");
@@ -1203,6 +1277,8 @@ function paintRows(){
         '<button class="mic" data-mic type="button" title="Talk instead of typing">' +
           '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/>' +
           '<path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>' +
+        '<button class="hear" data-hear type="button" hidden title="Hear the spoken version">' +
+          '<svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg></button>' +
         '<div class="recbar" data-recbar hidden><span class="dot"></span>' +
           '<span class="rt" data-timer>0:00</span><div class="lvl"><i data-level></i></div>' +
           '<button class="send" data-send type="button">Send</button>' +
