@@ -18,6 +18,7 @@ ROOT   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 INBOX  = os.path.join(ROOT, "voice-in")
 AUDIO  = os.path.join(ROOT, "audio")
 CONFIG = os.path.join(ROOT, "tools", "sync-config.js")
+LINKS  = os.path.join(ROOT, "links.txt")
 KEY    = os.environ.get("OPENAI_API_KEY", "").strip()
 
 TRANSCRIBE = "gpt-4o-transcribe"
@@ -114,6 +115,37 @@ def speak(text, cfg, dest):
     open(dest, "wb").write(raw)
 
 
+def relabel(vid, note):
+    """Put the note on the clip's line in links.txt, if the clip is live there.
+
+    WHY: the main page reads its note from links.txt and plays audio/<id>.mp3.
+    Those are two files, so they can disagree - and they did: a note written by
+    hand next to a recording made from different words meant the button read out
+    something the text never said. Writing both from this one string is the only
+    way they cannot drift apart.
+    """
+    try:
+        raw = open(LINKS, encoding="utf-8-sig").read()
+    except Exception:
+        return
+    lines, hit = raw.split("\n"), False
+    for i, line in enumerate(lines):
+        bare = line.strip()
+        # a parked line starts with # - leave it parked, and leave its note alone
+        if not bare or bare.startswith("#") or bare.startswith("//"):
+            continue
+        url = bare.split("|")[0].strip()
+        if vid not in url:
+            continue
+        lines[i] = url + " | " + note
+        hit = True
+    if not hit:
+        print("   %s is not live in links.txt - the note stays in the database only" % vid)
+        return
+    open(LINKS, "w", encoding="utf-8", newline="\n").write("\n".join(lines))
+    print("   links.txt updated, so the page shows the same words it speaks")
+
+
 def firebase(cfg, child, vid, value):
     if not cfg["db"]:
         print("   (no database address configured - the note stays in the repository only)")
@@ -170,6 +202,7 @@ def main():
             note = polish(said, cfg)
             print("   note : %s" % note[:110])
             firebase(cfg, "notes", vid, note)
+            relabel(vid, note)
             if want_audio:
                 speak(note, cfg, os.path.join(AUDIO, vid + ".mp3"))
                 firebase(cfg, "voices", vid, True)

@@ -987,6 +987,7 @@ function noteTools(box, getClip){
   var hearBt = box.querySelector("[data-hear]");
   var saved = "";        // what the note said when it was last put on screen
   var player = null;     // for playing the spoken version back
+  var sentAt = 0;        // when the current recording was handed over
 
   function say(msg, cls){
     if(!statusEl) return;
@@ -1155,6 +1156,7 @@ function noteTools(box, getClip){
       }).then(function(r){
         if(!r.ok) return r.text().then(function(t){
           throw new Error("could not send it (HTTP "+r.status+") "+t.slice(0,80)); });
+        sentAt = Date.now();
         say("Sent. Writing it up — usually under a minute…");
         await_(id);
       }).catch(function(e){
@@ -1181,11 +1183,14 @@ function noteTools(box, getClip){
           if(clip && clip.id===id){
             saved = clean(NOTES[id]);      // this is now the baseline, not an edit
             note.value = saved;
-            paintDirty(); paintHear();
+            paintDirty();
+            if(VOICES[id]) waitForVoice(id, sentAt || Date.now());
+            else paintHear();
           }
           if(cur && cur.id===id && box!==deckBox) paintNote();
           if(lists.classList.contains("open") && !openRow) paintRows();
-          say(VOICES[id] ? "Written up. Press \u25B6 to hear it." : "Written up.", "good");
+          say(VOICES[id] ? "Written up. The recording is still publishing\u2026"
+                         : "Written up.", "good");
         }
       });
     }, 5000);
@@ -1195,6 +1200,30 @@ function noteTools(box, getClip){
     var c=getClip();
     hearBt.hidden = !(c && VOICES[c.id]);
   }
+
+  /* The note comes back from the database in seconds; the recording has to be
+     committed and then published by GitHub Pages, which takes a minute or so
+     longer. In that gap the old file is still the one on the site - which is how
+     a fresh note ended up playing the PREVIOUS take. So the button stays away
+     until the file on the site is genuinely newer than the recording that was
+     sent. Pages returns Last-Modified, which is exactly the fact needed. */
+  function waitForVoice(id, since){
+    var url = "../audio/" + id + ".mp3", n = 0;
+    hearBt.hidden = true;
+    var poll = setInterval(function(){
+      n++;
+      if(n > 40){ clearInterval(poll); paintHear(); return; }
+      fetch(url + "?t=" + Date.now(), {method:"HEAD", cache:"no-store"}).then(function(r){
+        if(!r.ok) return;
+        var lm = Date.parse(r.headers.get("last-modified") || "");
+        if(!lm || lm >= since - 5000){
+          clearInterval(poll);
+          hearBt.hidden = false;
+          say("Written up. Press \u25B6 to hear it.", "good");
+        }
+      }).catch(function(){});
+    }, 4000);
+  }
   hearBt.addEventListener("click", function(e){
     e.stopPropagation();
     var c=getClip(); if(!c) return;
@@ -1202,6 +1231,8 @@ function noteTools(box, getClip){
     pauseClip();
     if(!player){ player=new Audio(); player.addEventListener("ended",function(){ hearBt.classList.remove("on"); }); }
     // straight from the repository, past any cached copy of an older take
+    // a fresh URL every time: GitHub Pages sends max-age=600, so without this a
+    // browser will happily keep the previous take for ten minutes
     player.src = "../audio/" + c.id + ".mp3?t=" + Date.now();
     player.play().then(function(){ hearBt.classList.add("on"); },
                        function(){ say("The spoken file is not on the site yet - give GitHub a minute.", "bad"); });
