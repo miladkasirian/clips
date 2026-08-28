@@ -791,7 +791,7 @@ function fanfare(){ [523.25,659.25,783.99,1046.5].forEach(function(f,i){ setTime
    Override by setting "kind" explicitly on the clip if you ever need to.
    ===================================================================== */
 var KINDS={
-  instagram:{label:"Instagram", ar:[4,5],  autoplay:false, ended:false},
+  instagram:{label:"Instagram", ar:[4,5],  autoplay:false, ended:false},   // 4:5 is only the opening guess
   youtube:  {label:"YouTube",   ar:[16,9], autoplay:true,  ended:true },
   vimeo:    {label:"Vimeo",     ar:[16,9], autoplay:true,  ended:true },
   gdrive:   {label:"Google Drive", ar:[16,9], autoplay:false, ended:false},
@@ -1006,6 +1006,15 @@ var RENDER={
       if(!f.contentWindow||e.source!==f.contentWindow) return;
       var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(x){ return; } }
       if(!d) return;
+      if(d.type==="MEASURE" && d.details && d.details.height>300){
+        // Instagram sizes its media box to the post's own shape, capped at 4:5 - a square
+        // post gets a square box. Assuming 4:5 for everything let the white footer show
+        // under anything that was not portrait. The MEASURE it sends is the whole card,
+        // and the chrome around the media is a fixed 54px header + 154px footer at any
+        // width (measured at 400 and 460, square and portrait), so this is exact.
+        var mediaH=d.details.height-208;
+        if(mediaH>60 && shell.offsetWidth>0) setRatio(shell.offsetWidth, Math.round(mediaH));
+      }
       if(d.type==="MOUNTED"||(d.type==="MEASURE"&&d.details&&d.details.height>420)){
         mounted=true;
         clearTimeout(slowTimer); clearTimeout(deadTimer);
