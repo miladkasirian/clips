@@ -124,11 +124,19 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
   stroke-linecap:round;stroke-linejoin:round}
 .notewrap .spk.has{color:var(--gold);border-color:rgba(255,200,97,.4);background:rgba(255,200,97,.12)}
 .notewrap .spk.busy{opacity:.55;pointer-events:none}
-.aistat{font-size:11.5px;color:var(--violet);letter-spacing:.2px;min-height:16px;padding:2px 2px 0}
+.aistat{font-size:11.5px;color:var(--violet);letter-spacing:.2px;height:16px;padding:2px 2px 0;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .aistat.bad{color:var(--no)}
 .aistat.good{color:var(--ok)}
-.keypanel{display:none;gap:8px;margin-top:8px}
+.keypanel{display:none;gap:8px;position:fixed;left:12px;right:12px;z-index:58;
+  bottom:calc(env(safe-area-inset-bottom) + 12px);
+  max-width:616px;margin:0 auto;padding:12px;border-radius:16px;
+  background:rgba(13,20,36,.98);border:1px solid var(--line2);
+  box-shadow:0 26px 60px -18px #000}
 .keypanel.open{display:flex}
+.keypanel::before{content:"OpenAI key \2014 kept on this device only";
+  position:absolute;left:14px;top:-22px;font-size:10.5px;font-weight:750;letter-spacing:.9px;
+  text-transform:uppercase;color:var(--violet)}
 .keypanel input{flex:1;min-width:0;height:40px;border-radius:11px;padding:0 12px;font-family:var(--mono);
   font-size:12px;color:var(--txt);background:#05080f;border:1px solid var(--line2)}
 .keypanel button{flex:none;height:40px;padding:0 14px;border-radius:11px;cursor:pointer;font-family:inherit;
@@ -894,6 +902,7 @@ document.addEventListener("keydown", function(e){
     if(e.key==="Escape") sheet.classList.remove("open");
     return;
   }
+  if(keyPanel.classList.contains("open") && e.key==="Escape"){ keyPanel.classList.remove("open"); return; }
   if(lists.classList.contains("open")){ if(e.key==="Escape") sheetShut(lists); return; }
   if(addSheet.classList.contains("open")){ if(e.key==="Escape") sheetShut(addSheet); return; }
   if(/^(INPUT|TEXTAREA)$/.test(e.target.tagName||"")) return;
