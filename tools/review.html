@@ -500,6 +500,17 @@ function buildFile(){
     keep.push(t);
   }
   var text = keep.join("\n").replace(/\n{3,}$/,"\n");
+  // the file states its own live count in a comment, so leaving it at 200 after
+  // a drop would make the file lie about itself
+  var live = 0, reserve = 0, kl = keep, j;
+  for(j=0;j<kl.length;j++){
+    var q = kl[j].trim();
+    if(!q) continue;
+    if(q.charAt(0)==="#"){ if(/^#\s*https?:/i.test(q)) reserve++; continue; }
+    live++;
+  }
+  text = text.replace(/^#\s*\d+\s+live links\..*$/m,
+    "# " + live + " live links. " + reserve + " more are commented out below.");
   if(dropped.length){
     // nothing is destroyed: dropped links go to the bottom, commented out, so a
     // change of mind costs one character rather than finding the link again
