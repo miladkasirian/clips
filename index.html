@@ -864,7 +864,12 @@ function syncWidth(){
    moves on its own. Real cleaning of the list is check-links.py's job - it can
    take its time and actually press play on each one.
    ===================================================================== */
-var PLAY_MS=4500;
+// An Instagram embed can genuinely take ten seconds or more to appear, especially
+// after a few have been loaded in a row. Giving up at 4.5s meant perfectly healthy
+// clips were being rolled past - pressing Replay brought the very same clip up fine.
+// Wait properly, tell the room it is still coming, and only move on when it really
+// has not arrived.
+var PLAY_MS=13000, SLOW_MS=5000;
 var sessionBad={};        // this tab only - never persisted, never changes the count
 var guard={day:"",dead:{},ok:{}};
 
@@ -965,6 +970,7 @@ function spin(){
    ===================================================================== */
 function clearMedia(){
   clearTimeout(loadTimer); clearTimeout(deadTimer);
+  loading.innerHTML='<div class="spinner"></div>';
   if(msgHook){ window.removeEventListener("message",msgHook); msgHook=null; }
   var m=shell.querySelectorAll("iframe,video"),i;
   for(i=0;i<m.length;i++){ try{ m[i].pause&&m[i].pause(); }catch(e){} m[i].removeAttribute("src"); m[i].remove(); }
@@ -976,15 +982,15 @@ function showError(h,d){
   errH.textContent=h; errD.innerHTML=d;
   errcard.classList.add("show");
 }
-function mkFrame(src,extraAllow){
+function mkFrame(src,extraAllow,waitForMount){
   var f=document.createElement("iframe");
   f.setAttribute("allow","autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share; fullscreen"+(extraAllow?"; "+extraAllow:""));
   f.setAttribute("allowfullscreen","true");
   f.setAttribute("scrolling","no");
   f.setAttribute("frameborder","0");
-  f.addEventListener("load",function(){ loading.classList.add("gone"); });
+  if(!waitForMount) f.addEventListener("load",function(){ loading.classList.add("gone"); });
   f.src=src;
-  loadTimer=setTimeout(function(){ loading.classList.add("gone"); },6000);
+  loadTimer=setTimeout(function(){ loading.classList.add("gone"); }, waitForMount?PLAY_MS+2000:6000);
   return f;
 }
 function bust(u){ return u+(u.indexOf("?")>-1?"&":"?")+"_="+Date.now(); }
@@ -992,19 +998,28 @@ function bust(u){ return u+(u.indexOf("?")>-1?"&":"?")+"_="+Date.now(); }
 var RENDER={
   instagram:function(clip,info){
     shell.classList.add("ig");
-    var f=mkFrame(bust("https://www.instagram.com/reel/"+info.id+"/embed/"));
+    var f=mkFrame(bust("https://www.instagram.com/reel/"+info.id+"/embed/"),null,true);
     // second layer of the guard: if this reel never reports MOUNTED it is gone,
     // so roll again instead of showing Instagram's error card to the room
-    var mounted=false;
+    var mounted=false, slowTimer;
     msgHook=function(e){
       if(!f.contentWindow||e.source!==f.contentWindow) return;
       var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(x){ return; } }
       if(!d) return;
-      if(d.type==="MOUNTED"||(d.type==="MEASURE"&&d.details&&d.details.height>420)) mounted=true;
+      if(d.type==="MOUNTED"||(d.type==="MEASURE"&&d.details&&d.details.height>420)){
+        mounted=true;
+        clearTimeout(slowTimer); clearTimeout(deadTimer);
+        loading.classList.add("gone");          // the veil lifts when the clip is really there
+      }
     };
     window.addEventListener("message",msgHook);
+    // still waiting after a few seconds: say so rather than showing a frozen frame
+    slowTimer=setTimeout(function(){
+      if(!mounted && shell.contains(f)) loading.innerHTML='<div class="spinner"></div>';
+    },SLOW_MS);
     deadTimer=setTimeout(function(){
       if(!mounted && shell.contains(f)) rerollPastDead(info.id);
+      clearTimeout(slowTimer);
     },PLAY_MS);
     // Instagram wraps the whole media area in <a target="_blank">, so a click on a
     // finished clip jumps to instagram.com. No allow-popups / allow-top-navigation
@@ -1113,9 +1128,9 @@ function rerollPastDead(id){
   if(id) sessionBad[id]=1;
   var wasCurrent=current;
   if(++rerolls>6 || !CLIPS.length){
-    showError("Could not reach this clip",
-      "It looks like it was removed. " + (CLIPS.length ? "Close and spin again." :
-      "Every clip in the list came back empty - check links.txt."));
+    showError("Instagram is being slow",
+      CLIPS.length ? "Several clips in a row did not come up. That is usually the connection rather than the clips - press Replay, or close and spin again."
+                   : "Nothing in the list would load - check links.txt.");
     return;
   }
   var pick=CLIPS[randInt(CLIPS.length)], n=0;
