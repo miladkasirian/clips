@@ -1116,6 +1116,14 @@ function clock(sec){
     TR.drag=false; track.classList.remove("dragging");
     if(TR.seek) TR.seek(TR.pos);
   }
+  // A plain click is handled on its own as well as through the drag pair. A
+  // mousedown/mouseup with no gap between them does not always come through as a
+  // drag, and a progress bar that ignores a quick click is a broken progress bar.
+  track.addEventListener("click",function(ev){
+    if(!TR.on||!TR.dur) return;
+    TR.pos=frac(ev)*TR.dur; TR.paint();
+    if(TR.seek) TR.seek(TR.pos);
+  });
   track.addEventListener("mousedown",down);   track.addEventListener("touchstart",down,{passive:false});
   window.addEventListener("mousemove",move);  window.addEventListener("touchmove",move,{passive:false});
   window.addEventListener("mouseup",up);      window.addEventListener("touchend",up);
