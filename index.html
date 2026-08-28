@@ -168,12 +168,15 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
   gap:16px;padding:26px;text-align:center;background:rgba(4,7,14,.92);backdrop-filter:blur(8px)}
 .endcard.show,.errcard.show{display:flex}
 .endcard p{font-size:14px;color:var(--txt-dim)}
-/* whatever was written about this clip, shown once it has finished */
+/* Whatever was written about this clip. Hidden until asked for - the end of a
+   clip should not put a wall of text in front of the room uninvited. */
 .endcard p.note{font-size:16.5px;line-height:1.55;font-weight:600;color:var(--txt);
-  max-width:44ch;letter-spacing:-.1px}
+  max-width:46ch;letter-spacing:-.1px;animation:noteIn .28s cubic-bezier(.2,.9,.25,1)}
 .endcard p.note::before{content:"";display:block;width:34px;height:3px;border-radius:99px;
   margin:0 auto 12px;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
 .endcard p.note[hidden]{display:none}
+@keyframes noteIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.endrow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .errcard .h{font-size:15px;font-weight:650;color:var(--danger)}
 .errcard .d{font-size:12.5px;color:var(--txt-dim);line-height:1.6;max-width:38ch}
 .errcard code{font-family:var(--mono);font-size:11.5px;color:var(--gold);word-break:break-all}
@@ -356,11 +359,17 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
         <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><b>Play again</b>
       </button>
       <div class="endcard" id="endcard">
+        <p id="endLede">Clip finished</p>
         <p class="note" id="endNote" hidden></p>
-        <p>Clip finished</p>
-        <button class="btn primary" style="flex:none;padding:0 22px" id="endReplay" type="button">
-          <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg> Play again
-        </button>
+        <div class="endrow">
+          <button class="btn primary" style="flex:none;padding:0 22px" id="endReplay" type="button">
+            <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg> Play again
+          </button>
+          <button class="btn" style="flex:none;padding:0 20px" id="endNoteBtn" type="button" hidden>
+            <svg viewBox="0 0 24 24"><path d="M8 10h8"/><path d="M8 14h5"/><path d="M21 12a9 9 0 1 1-3.2-6.9"/></svg>
+            <span id="endNoteTxt">Show the note</span>
+          </button>
+        </div>
       </div>
       <div class="errcard" id="errcard">
         <div class="h" id="errH"></div>
@@ -815,7 +824,8 @@ var DATA_URL = "";
 
 var $=function(id){return document.getElementById(id);};
 var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),counter=$("counter"),
-    player=$("player"),wrap=$("wrap"),shell=$("shell"),loading=$("loading"),endcard=$("endcard"),endNote=$("endNote"),igReplay=$("igReplay"),
+    player=$("player"),wrap=$("wrap"),shell=$("shell"),loading=$("loading"),endcard=$("endcard"),
+    endNote=$("endNote"),endNoteBtn=$("endNoteBtn"),endNoteTxt=$("endNoteTxt"),endLede=$("endLede"),igReplay=$("igReplay"),
     errcard=$("errcard"),errH=$("errH"),errD=$("errD"),
     pTopic=$("pTopic"),pKind=$("pKind"),pTitle=$("pTitle"),pCreator=$("pCreator"),pNote=$("pNote"),
     replayBtn=$("replayBtn"),endReplay=$("endReplay"),
@@ -1433,8 +1443,11 @@ function mount(clip){
 function openPlayer(clip){
   if(!clip) return;
   current=clip; retriedOnce=false;
+  // the note is loaded but stays folded away until the button is pressed
   var note=(clip.note||"").trim();
-  endNote.textContent=note; endNote.hidden=!note;
+  endNote.textContent=note; endNote.hidden=true;
+  endNoteBtn.hidden=!note; endNoteTxt.textContent="Show the note";
+  endLede.hidden=false;
   pTopic.textContent=clip.topic||"";
   pTitle.textContent=clip.untitled ? ("Clip "+pad(clip.id)) : (clip.title||"");
   pCreator.textContent=clip.creator?("by "+clip.creator):"";
@@ -1536,6 +1549,12 @@ pFind.addEventListener("keydown",function(e){
 /* ---------------- wiring ---------------- */
 spinBtn.addEventListener("click",spin);
 closeBtn.addEventListener("click",closePlayer);
+endNoteBtn.addEventListener("click",function(){
+  var show = endNote.hidden;
+  endNote.hidden = !show;
+  endLede.hidden = show;                       // the note takes the caption's place
+  endNoteTxt.textContent = show ? "Hide" : "Show the note";
+});
 replayBtn.addEventListener("click",replay);
 igReplay.addEventListener("click",replay);
 endReplay.addEventListener("click",replay);

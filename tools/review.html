@@ -91,17 +91,30 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
 .rail b{position:absolute;top:50%;left:0;width:13px;height:13px;border-radius:50%;background:#fff;
   transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,.6)}
 
-/* ---------- the note ---------- */
-.notebar{display:flex;align-items:center;gap:8px;flex:none;height:42px}
-.notebar input{flex:1;height:42px;min-width:0;border-radius:12px;padding:0 13px;font-family:inherit;
-  font-size:13.5px;color:var(--txt);background:rgba(255,255,255,.05);border:1px solid var(--line2)}
-.notebar input::placeholder{color:var(--faint)}
-.notebar input:focus{outline:none;border-color:rgba(49,224,192,.55);background:rgba(49,224,192,.07)}
-.notebar .sv{flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;cursor:pointer;
+/* ---------- the note, beside the buttons ----------
+   It used to be a single-line box on its own row above the buttons. On a short
+   window that extra row pushed the footer up over the scrub bar, and one line
+   was not enough room to write in. */
+.deck{display:flex;flex-direction:column;gap:9px;flex:none}
+.deck .btns{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.notewrap{position:relative;flex:1;min-width:0}
+.notewrap textarea{width:100%;height:96px;resize:none;border-radius:14px;padding:11px 46px 11px 13px;
+  font-family:inherit;font-size:13.5px;line-height:1.5;color:var(--txt);
+  background:rgba(255,255,255,.05);border:1px solid var(--line2)}
+.notewrap textarea::placeholder{color:var(--faint)}
+.notewrap textarea:focus{outline:none;border-color:rgba(49,224,192,.55);background:rgba(49,224,192,.07)}
+.notewrap .sv{position:absolute;right:8px;bottom:8px;width:32px;height:32px;border-radius:10px;
+  display:grid;place-items:center;cursor:pointer;
   border:1px solid rgba(49,224,192,.4);background:rgba(49,224,192,.13);color:var(--ok)}
-.notebar .sv svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;
+.notewrap .sv svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.4;
   stroke-linecap:round;stroke-linejoin:round}
-.notebar .sv.saved{background:var(--ok);color:#04121a;border-color:transparent}
+.notewrap .sv.saved{background:var(--ok);color:#04121a;border-color:transparent}
+/* once there is room, the buttons shrink and the writing space grows */
+@media (min-width:560px){
+  .deck{flex-direction:row;align-items:stretch}
+  .deck .btns{flex:0 0 300px;align-content:start}
+  .notewrap textarea{height:100%;min-height:110px}
+}
 .rhead em{flex:none;font-style:normal;font-size:11px;color:var(--ok)}
 .rnote{font-size:12.5px;color:var(--dim);padding:0 12px 10px;line-height:1.5}
 .rbody input.ni{width:100%;height:40px;border-radius:11px;padding:0 12px;font-family:inherit;font-size:13px;
@@ -243,26 +256,30 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
   </main>
 
   <footer>
-    <div class="notebar">
-      <input id="noteIn" type="text" maxlength="140" spellcheck="false"
-             placeholder="Note for this clip &mdash; shown when it ends (optional)">
-      <button class="sv" id="noteSave" type="button" title="Save the note" aria-label="Save note">
-        <svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg>
-      </button>
-    </div>
-    <div class="grid" style="margin-top:9px">
-      <button class="act drop" id="bDrop" type="button">
-        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Drop
-      </button>
-      <button class="act keep" id="bKeep" type="button">
-        <svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg> Keep
-      </button>
-      <button class="act small" id="bSkip" type="button">
-        <svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M20 9A8 8 0 0 0 6.3 5.3L4 8"/></svg> Skip for now
-      </button>
-      <button class="act small" id="bUndo" type="button">
-        <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg> Undo
-      </button>
+    <div class="deck">
+      <div class="btns">
+        <button class="act drop" id="bDrop" type="button">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Drop
+        </button>
+        <button class="act keep" id="bKeep" type="button">
+          <svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg> Keep
+        </button>
+        <button class="act small" id="bSkip" type="button">
+          <svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M20 9A8 8 0 0 0 6.3 5.3L4 8"/></svg> Skip
+        </button>
+        <button class="act small" id="bUndo" type="button">
+          <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg> Undo
+        </button>
+      </div>
+      <div class="notewrap">
+        <textarea id="noteIn" maxlength="600" spellcheck="false"
+          name="clip-note" autocomplete="off" autocorrect="off" autocapitalize="sentences"
+          data-lpignore="true" data-1p-ignore data-form-type="other"
+          placeholder="Note for this clip &mdash; shown when it ends (optional)"></textarea>
+        <button class="sv" id="noteSave" type="button" title="Save the note" aria-label="Save note">
+          <svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg>
+        </button>
+      </div>
     </div>
     <div class="grid" style="margin-top:9px">
       <button class="act small" id="bLists" type="button">
@@ -369,7 +386,9 @@ https://www.youtube.com/shorts/5lC8TL-BeOQ</div>
         <p style="margin-bottom:8px">This needs a GitHub token with write access to
           <code>miladkasirian/clips</code>. It is kept on <b>this phone only</b> and never
           goes into the repository.</p>
-        <input class="tok" id="tokIn" type="password" placeholder="github_pat_..." autocomplete="off" spellcheck="false">
+        <input class="tok" id="tokIn" type="password" placeholder="github_pat_..."
+               name="gh-token" autocomplete="new-password" spellcheck="false"
+               data-lpignore="true" data-1p-ignore data-form-type="other">
       </div>
       <div class="grid" style="margin-top:9px">
         <button class="act keep" id="bPublish" type="button">
@@ -1005,7 +1024,8 @@ function saveNote(){
 noteSave.addEventListener("click", saveNote);
 noteIn.addEventListener("blur", saveNote);
 noteIn.addEventListener("keydown", function(e){
-  if(e.key === "Enter"){ e.preventDefault(); noteIn.blur(); }
+  // it is a textarea now, so Enter belongs to the text; Ctrl/Cmd+Enter finishes
+  if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); noteIn.blur(); }
 });
 // typing must not be read as a shortcut, and a pause should save on its own so a
 // note is never lost by moving on without pressing anything
