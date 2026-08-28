@@ -19,6 +19,6 @@
    disturbing this one.
    --------------------------------------------------------------------- */
 window.SYNC = {
-  db:   "",
+  db:   "https://break-time-3722c-default-rtdb.firebaseio.com",
   room: "familyguy"
 };
