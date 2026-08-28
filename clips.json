@@ -1,0 +1,197 @@
+{
+  "meta": {
+    "appName": "Break Time",
+    "badge": "🍿",
+    "course": "FIN 220",
+    "courseName": "Financial Management",
+    "heading": "Time for a",
+    "headingAccent": "Break",
+    "brandingNote": "Labels only - change them for any course. badge is the little square top-left (an emoji or up to 4 characters). Drop course/courseName and the line under the name disappears. Add \"subtitle\" if you want a line under the big heading; leave it out and there is none. One deployment can serve several classes: keep acc302.json, fin322.json beside index.html and open ?clips=acc302.json",
+    "_": "---- the rest is documentation, not settings ----",
+    "term": "Fall 2026",
+    "instructor": "Milad Kasirian",
+    "schemaVersion": 3,
+    "readThisFirst": [
+      "This file controls EVERYTHING the page loads. The page has no list of its own.",
+      "'sources' is resolved at load time and every result is merged into one random pool.",
+      "Turn any source off with \"enabled\": false instead of deleting it.",
+      "Click the chip at the top right of the page to see what each source returned, or why it failed."
+    ],
+    "sourceTypes": {
+      "clips": "an inline list, right here in this file",
+      "folder": "a folder of video files; read live when the page is served, otherwise from that source's 'manifest' list",
+      "gdriveFolder": "a shared Google Drive folder; needs a free Google API key, see the notes on that source",
+      "json": "another list file, local or on any https URL"
+    },
+    "srcTypes": [
+      "Every clip needs exactly one 'src'. The player works out what it is.",
+      "Instagram   -> https://www.instagram.com/reel/CODE/          click to start, loops, no end signal",
+      "YouTube     -> https://youtu.be/ID  (Shorts too)             autoplays, plays once, reports the end",
+      "Vimeo       -> https://vimeo.com/123456789                   autoplays, plays once, reports the end",
+      "Direct file -> https://example.com/clip.mp4                  autoplays, plays once, reports the end",
+      "In the repo -> videos/clip.mp4                               autoplays, plays once, reports the end",
+      "Drive file  -> https://drive.google.com/file/d/ID/view       click to start, no end signal",
+      "Optional per clip: 'kind' forces a renderer, 'link' sets the arrow button, 'disabled': true parks it."
+    ],
+    "verified": "2026-08-28",
+    "builtBy": "sync-clips.py --github",
+    "note": "Served over https from GitHub Pages. Every src must be a public link or a file committed inside this folder - a page on the web cannot read files on your PC."
+  },
+  "sources": [
+    {
+      "id": "core",
+      "type": "clips",
+      "name": "Class clip list",
+      "enabled": true,
+      "note": "Edit this array to change the class list. Add a clip by adding a title and a src.",
+      "clips": [
+        {
+          "id": 1,
+          "title": "How to Value a Company - Part 1: Free Cash Flow",
+          "creator": "Benevolent Brokers",
+          "topic": "Valuation / Free Cash Flow",
+          "src": "https://www.instagram.com/reel/DV-g3wmDaLe/"
+        },
+        {
+          "id": 2,
+          "title": "Cash Flow Is Not the Same as Profitability",
+          "creator": "Nosakhare Tunde-Oni",
+          "topic": "Financial Statements / Cash Flow",
+          "src": "https://www.instagram.com/reel/DbTc4RARpM8/"
+        },
+        {
+          "id": 3,
+          "title": "How to Read a Balance Sheet",
+          "creator": "Brian Feroldi",
+          "topic": "Financial Statements / Balance Sheet",
+          "src": "https://www.instagram.com/reel/C5waK5hCueF/"
+        },
+        {
+          "id": 4,
+          "title": "Inflation, Explained in Under 60 Seconds",
+          "creator": "Asia School of Business",
+          "topic": "Inflation / Macro Context",
+          "src": "https://www.instagram.com/reel/DQT-B4hDeBT/"
+        },
+        {
+          "id": 5,
+          "title": "Compound Interest Explained (Pop-Culture Analogy)",
+          "creator": "Ethan Zhou",
+          "topic": "Time Value of Money",
+          "src": "https://www.instagram.com/reel/DUxvYljkbpI/"
+        },
+        {
+          "id": 6,
+          "title": "What Is Compound Interest?",
+          "creator": "Muhammad Lambat | Halal Investing",
+          "topic": "Time Value of Money",
+          "src": "https://www.instagram.com/reel/C0-AdLmLrvl/"
+        },
+        {
+          "id": 7,
+          "title": "Why Start Investing NOW",
+          "creator": "Investa",
+          "topic": "Time Value of Money / Investing",
+          "src": "https://www.instagram.com/reel/DGkuYTxNfC9/"
+        },
+        {
+          "id": 8,
+          "title": "There Is No Investing Without Risk",
+          "creator": "Financial Markets Authority",
+          "topic": "Risk and Return",
+          "src": "https://www.instagram.com/reel/DWU3fhODy8D/"
+        },
+        {
+          "id": 9,
+          "title": "Diversification Means Spreading Your Risk",
+          "creator": "The Market Hustle",
+          "topic": "Risk and Return / Portfolio",
+          "src": "https://www.instagram.com/reel/DINQmPovQz7/"
+        },
+        {
+          "id": 10,
+          "title": "The Fed Held Interest Rates Steady",
+          "creator": "C-SPAN",
+          "topic": "Interest Rates / Monetary Policy",
+          "src": "https://www.instagram.com/reel/DZuvMeroodu/"
+        },
+        {
+          "title": "EXAMPLE - a YouTube video or Short",
+          "creator": "",
+          "topic": "Example, delete me",
+          "src": "https://www.youtube.com/watch?v=REPLACE_ID",
+          "disabled": true,
+          "id": 11
+        },
+        {
+          "title": "EXAMPLE - a Vimeo video",
+          "creator": "",
+          "topic": "Example, delete me",
+          "src": "https://vimeo.com/000000000",
+          "disabled": true,
+          "id": 12
+        },
+        {
+          "title": "EXAMPLE - a Google Drive file shared as 'Anyone with the link'",
+          "creator": "",
+          "topic": "Example, delete me",
+          "src": "https://drive.google.com/file/d/REPLACE_FILE_ID/view",
+          "disabled": true,
+          "id": 13
+        },
+        {
+          "title": "EXAMPLE - any direct video URL",
+          "creator": "",
+          "topic": "Example, delete me",
+          "src": "https://example.com/clip.mp4",
+          "disabled": true,
+          "id": 14
+        },
+        {
+          "title": "EXAMPLE - a file anywhere on this PC or in Google Drive desktop",
+          "creator": "",
+          "topic": "Example, delete me",
+          "src": "G:\\My Drive\\FIN220 clips\\lecture-hook.mp4",
+          "disabled": true,
+          "id": 15
+        },
+        {
+          "title": "EXAMPLE - a file inside this folder (works on GitHub Pages too)",
+          "creator": "",
+          "topic": "Example, delete me",
+          "src": "videos/lecture-hook.mp4",
+          "disabled": true,
+          "id": 16
+        }
+      ]
+    },
+    {
+      "id": "local-videos",
+      "type": "folder",
+      "name": "Video files in this repo",
+      "enabled": false,
+      "path": "videos/",
+      "topic": "Local clip",
+      "manifest": [],
+      "note": "Off, because the list is all links. If you ever commit video files into videos/, set enabled to true and put their filenames in 'manifest' (sync-clips.bat does that for you locally). A folder listing cannot be read on GitHub Pages, which is what 'manifest' is for."
+    },
+    {
+      "id": "drive",
+      "type": "gdriveFolder",
+      "name": "Shared Google Drive folder",
+      "enabled": false,
+      "folder": "https://drive.google.com/drive/folders/12idEFJghPR7AlzAomrl0Eg82lHRcCX2Y",
+      "apiKey": "",
+      "topic": "Drive clip",
+      "note": "Off, and not needed while everything is links. To switch it on you need a free Google API key: console.cloud.google.com -> new project -> enable 'Google Drive API' -> Credentials -> API key -> paste it into apiKey above. Google refuses to list a folder to an anonymous caller, so there is no key-free way. The folder must stay shared as 'Anyone with the link'. Note the key sits in this file in a public repo, so restrict it to the Drive API and to your GitHub Pages domain."
+    },
+    {
+      "id": "extra",
+      "type": "json",
+      "name": "Extra list file",
+      "enabled": false,
+      "url": "more-clips.json",
+      "note": "Off. Point this at another clips file - a second list in the repo, or any https URL - and its clips join the same pool."
+    }
+  ]
+}

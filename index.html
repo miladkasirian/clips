@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Random Clip Picker</title>
+<style>
+:root{
+  --bg-0:#070b14; --bg-1:#0d1424; --bg-2:#141d33;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+  --txt:#eef2fb; --txt-dim:#93a0bd; --txt-faint:#5f6d8c;
+  --accent:#31e0c0; --accent-2:#4d8dff; --gold:#ffc861; --danger:#ff5f6d;
+  --shadow-lg:0 32px 80px -20px rgba(0,0,0,.85);
+  --font:"Segoe UI Variable Display","Segoe UI",Inter,system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --mono:"Cascadia Mono","SF Mono",Consolas,"Roboto Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font);color:var(--txt);background:var(--bg-0);overflow:hidden;-webkit-font-smoothing:antialiased}
+#aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+#aurora span{position:absolute;border-radius:50%;filter:blur(90px);opacity:.42;animation:drift 26s ease-in-out infinite}
+#aurora span:nth-child(1){width:52vw;height:52vw;left:-12vw;top:-16vw;background:radial-gradient(circle,#ff4d9d,transparent 68%);opacity:.32}
+#aurora span:nth-child(2){width:46vw;height:46vw;right:-12vw;top:2vh;background:radial-gradient(circle,#18c9a8,transparent 68%);animation-delay:-9s}
+#aurora span:nth-child(3){width:44vw;height:44vw;left:24vw;bottom:-22vw;background:radial-gradient(circle,#7c5cff,transparent 68%);animation-delay:-17s}
+#aurora span:nth-child(4){width:34vw;height:34vw;right:12vw;bottom:-14vw;background:radial-gradient(circle,#ffb020,transparent 68%);animation-delay:-4s;opacity:.28}
+@keyframes drift{0%,100%{transform:translate3d(0,0,0) scale(1)}33%{transform:translate3d(4vw,-3vh,0) scale(1.1)}66%{transform:translate3d(-3vw,4vh,0) scale(.94)}}
+#grid{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.35;
+  background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:56px 56px;
+  mask-image:radial-gradient(ellipse 80% 65% at 50% 45%,#000 30%,transparent 100%);
+  -webkit-mask-image:radial-gradient(ellipse 80% 65% at 50% 45%,#000 30%,transparent 100%)}
+
+.stage{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:22px}
+.topbar{position:fixed;top:0;left:0;right:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 22px}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand .mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:800;font-size:13px;letter-spacing:.5px;
+  background:linear-gradient(140deg,var(--accent),var(--accent-2));color:#05131b;box-shadow:0 6px 20px -6px var(--accent)}
+.brand b{font-size:14.5px;letter-spacing:.2px;font-weight:650;white-space:nowrap}
+.brand small{display:block;font-size:11.5px;color:var(--txt-faint);letter-spacing:.6px;text-transform:uppercase;font-weight:600}
+.toolset{display:flex;align-items:center;gap:9px}
+.chip{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:999px;border:1px solid var(--line);
+  background:rgba(255,255,255,.035);color:var(--txt-dim);font-size:12.5px;font-weight:600;letter-spacing:.2px;cursor:pointer;
+  transition:.18s ease;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font-family:inherit;white-space:nowrap}
+.chip:hover{color:var(--txt);border-color:var(--line-2);background:rgba(255,255,255,.07)}
+.chip[aria-pressed="false"]{opacity:.5}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.chip.warn .dot{background:var(--gold);box-shadow:0 0 8px var(--gold)}
+.chip input{display:none}
+
+h1{font-size:clamp(32px,5.6vw,58px);font-weight:800;letter-spacing:-1.6px;text-align:center;line-height:1.02}
+h1 em{font-style:normal;background:linear-gradient(96deg,#ff5d8f,var(--gold) 45%,var(--accent));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 6px 26px rgba(255,93,143,.35))}
+.sub{text-align:center;color:var(--txt-dim);font-size:14.5px;max-width:46ch;line-height:1.55}
+
+.machine{position:relative;width:min(560px,94vw);border-radius:26px;padding:26px 20px 34px;
+  background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.025));
+  border:1px solid var(--line-2);box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.14);
+  backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+.bulbs{position:absolute;left:20px;right:20px;display:flex;justify-content:space-between;pointer-events:none;z-index:2}
+.bulbs.t{top:11px} .bulbs.b{bottom:11px}
+.bulbs i{width:7px;height:7px;border-radius:50%;background:#3b2c14;animation:blink 1.5s linear infinite}
+@keyframes blink{0%,100%{background:#3b2c14;box-shadow:none}
+  42%{background:var(--gold);box-shadow:0 0 9px 2px rgba(255,200,97,.75)}}
+.machine.hot .bulbs i{animation-duration:.45s}
+@media (prefers-reduced-motion:reduce){ .bulbs i{animation:none;background:#3b2c14} }
+
+.counter{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:16px}
+.counter .num{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:2px;color:var(--accent);
+  background:rgba(49,224,192,.1);border:1px solid rgba(49,224,192,.28);border-radius:9px;padding:5px 12px;min-width:74px;text-align:center}
+.counter .lbl{font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--txt-faint);font-weight:700}
+
+.window{position:relative;height:120px;border-radius:16px;overflow:hidden;background:rgba(3,7,15,.72);
+  border:1px solid var(--line);box-shadow:inset 0 12px 26px -12px #000,inset 0 -12px 26px -12px #000}
+.window::before,.window::after{content:"";position:absolute;left:0;right:0;height:34px;z-index:2;pointer-events:none}
+.window::before{top:0;background:linear-gradient(#070b14,transparent)}
+.window::after{bottom:0;background:linear-gradient(transparent,#070b14)}
+.payline{position:absolute;left:10px;right:10px;top:50%;height:1px;transform:translateY(-.5px);z-index:3;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(49,224,192,.55),transparent)}
+.payline i{position:absolute;top:-4px;width:0;height:0;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent}
+.payline i.l{left:-2px;border-left:7px solid var(--accent)}
+.payline i.r{right:-2px;border-right:7px solid var(--accent)}
+.strip{position:absolute;left:0;right:0;top:0;will-change:transform}
+.cell{height:118px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0 20px;text-align:center}
+.cell .t{font-size:16.5px;font-weight:650;letter-spacing:-.25px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cell .m{font-size:11.5px;color:var(--txt-faint);letter-spacing:.5px;font-weight:600;text-transform:uppercase}
+.window.won .cell.hit .t{color:var(--gold);text-shadow:0 0 24px rgba(255,200,97,.5)}
+
+.spin{margin-top:20px;width:100%;height:58px;border:0;border-radius:15px;cursor:pointer;position:relative;overflow:hidden;
+  font-family:inherit;font-size:16px;font-weight:750;letter-spacing:.6px;color:#04121a;
+  background:linear-gradient(120deg,var(--accent),#7bf0d5 40%,var(--accent-2));
+  box-shadow:0 7px 0 #0f8f78, 0 18px 44px -14px rgba(49,224,192,.8), inset 0 1px 0 rgba(255,255,255,.6);
+  transition:transform .09s ease,box-shadow .09s ease,filter .25s ease}
+.spin:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 9px 0 #0f8f78,0 24px 56px -14px rgba(49,224,192,.95),inset 0 1px 0 rgba(255,255,255,.6)}
+.spin:active:not(:disabled){transform:translateY(5px);box-shadow:0 2px 0 #0f8f78,0 10px 24px -12px rgba(49,224,192,.8),inset 0 1px 0 rgba(255,255,255,.6)}
+.spin:disabled{cursor:progress;filter:grayscale(.55) brightness(.8)}
+.spin span{position:relative;z-index:1}
+.spin::after{content:"";position:absolute;top:0;bottom:0;width:42%;left:-60%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.6),transparent);animation:sheen 3.4s ease-in-out infinite}
+.spin:disabled::after{animation:none;opacity:0}
+@keyframes sheen{0%{left:-60%}55%,100%{left:130%}}
+.hint{margin-top:11px;text-align:center;font-size:12px;color:var(--txt-faint);letter-spacing:.3px}
+kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);border:1px solid var(--line-2);
+  border-bottom-width:2px;border-radius:5px;padding:1.5px 6px;color:var(--txt-dim)}
+
+/* ---------- player ---------- */
+#player{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;padding:22px;
+  background:rgba(4,7,14,.86);backdrop-filter:blur(26px) saturate(120%);-webkit-backdrop-filter:blur(26px) saturate(120%)}
+#player.open{display:flex;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* --arW/--arH are set per source kind by JS; the shell derives its height from the
+   smaller of "what the viewport allows" and "what the max width implies", then width
+   follows from the aspect ratio. --w is measured back off the shell so the header and
+   the control bar always match the video exactly, whatever its shape. */
+.player-wrap{--wmax:min(460px,92vw); --vchrome:172px; --arW:4; --arH:5; --w:430px;
+  display:flex;flex-direction:column;align-items:center;gap:12px;max-height:100%;
+  animation:rise .42s cubic-bezier(.2,.9,.25,1)}
+@keyframes rise{from{opacity:0;transform:translateY(26px) scale(.965)}to{opacity:1;transform:none}}
+
+.p-head{display:flex;align-items:center;gap:14px;padding:0 4px;width:var(--w);min-width:260px}
+.p-head .meta{min-width:0;flex:1}
+.p-head .meta .tp{font-size:11px;font-weight:750;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);
+  display:flex;align-items:center;gap:8px}
+.p-head .meta .tp b{font-weight:750;color:var(--txt-faint);letter-spacing:1px}
+.p-head .meta .ti{font-size:16.5px;font-weight:650;letter-spacing:-.25px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-head .meta .cr{font-size:12.5px;color:var(--txt-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;cursor:pointer;
+  border:1px solid var(--line-2);background:rgba(255,255,255,.05);color:var(--txt-dim);transition:.18s ease}
+.iconbtn:hover{background:rgba(255,95,109,.16);border-color:rgba(255,95,109,.5);color:#ffd9dc;transform:rotate(90deg)}
+.iconbtn svg{width:17px;height:17px;stroke:currentColor;stroke-width:2.1;fill:none;stroke-linecap:round}
+
+.shell{position:relative;background:#000;border-radius:20px;overflow:hidden;flex:none;
+  border:1px solid var(--line-2);box-shadow:var(--shadow-lg);
+  aspect-ratio:var(--arW) / var(--arH);
+  height:min(calc(100vh - var(--vchrome)), calc(var(--wmax) * var(--arH) / var(--arW)));
+  width:auto}
+.shell iframe,.shell video{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#000}
+.shell video{object-fit:contain}
+/* Instagram's embed always draws a fixed 54px account header above a media box exactly
+   1.25x the iframe width, then a like/comment footer. Shifting up by 54px inside an
+   overflow:hidden 4:5 box leaves exactly the video. */
+.shell.ig iframe{top:-54px;height:calc(100% + 420px)}
+
+.shell .loading{position:absolute;inset:0;display:grid;place-items:center;background:#05080f;z-index:2;transition:opacity .45s ease}
+.shell .loading.gone{opacity:0;pointer-events:none}
+.spinner{width:34px;height:34px;border-radius:50%;border:2.5px solid rgba(255,255,255,.14);border-top-color:var(--accent);animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.endcard,.errcard{position:absolute;inset:0;z-index:3;display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;padding:26px;text-align:center;background:rgba(4,7,14,.92);backdrop-filter:blur(8px)}
+.endcard.show,.errcard.show{display:flex}
+.endcard p{font-size:14px;color:var(--txt-dim)}
+.errcard .h{font-size:15px;font-weight:650;color:var(--danger)}
+.errcard .d{font-size:12.5px;color:var(--txt-dim);line-height:1.6;max-width:38ch}
+.errcard code{font-family:var(--mono);font-size:11.5px;color:var(--gold);word-break:break-all}
+
+#player:fullscreen,#player:-webkit-full-screen{padding:18px;background:#04070e}
+#player:fullscreen .player-wrap,#player:-webkit-full-screen .player-wrap{--wmax:94vw;--vchrome:150px;height:100%;justify-content:center}
+
+.p-bar{display:flex;gap:10px;padding:0 4px;width:var(--w);min-width:260px}
+.btn{flex:1;height:46px;border-radius:13px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:650;letter-spacing:.2px;white-space:nowrap;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:.18s ease;
+  border:1px solid var(--line-2);background:rgba(255,255,255,.055);color:var(--txt)}
+.btn:hover{background:rgba(255,255,255,.11);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.1;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.btn.primary{background:linear-gradient(120deg,var(--accent),var(--accent-2));color:#04121a;border-color:transparent;
+  box-shadow:0 12px 30px -12px rgba(49,224,192,.75)}
+.btn.primary:hover{box-shadow:0 18px 40px -12px rgba(49,224,192,.9)}
+.btn.ghost{flex:none;width:52px}
+.btn[hidden]{display:none}
+.p-note{text-align:center;font-size:11.5px;color:var(--txt-faint);letter-spacing:.2px;padding:0 6px;width:var(--w);min-width:260px}
+
+#confetti{position:fixed;inset:0;z-index:38;pointer-events:none}
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:60;opacity:0;pointer-events:none;
+  max-width:min(560px,92vw);padding:11px 17px;border-radius:12px;font-size:12.5px;line-height:1.55;
+  background:rgba(20,29,51,.96);border:1px solid var(--line-2);color:var(--txt-dim);
+  box-shadow:0 18px 40px -14px #000;transition:.32s cubic-bezier(.2,.9,.25,1)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:560px){
+  .stage{gap:18px;padding:16px}
+  .brand small{display:none}
+  .window{height:102px}
+  .cell{height:100px}
+  .player-wrap{--vchrome:196px}
+  .p-bar{flex-wrap:wrap}
+}
+@media (prefers-reduced-motion:reduce){ #aurora span,.spin::after{animation:none} }
+
+#panel{position:fixed;top:62px;right:22px;z-index:55;width:min(430px,92vw);max-height:70vh;overflow:auto;
+  border-radius:16px;padding:8px;display:none;
+  background:rgba(13,20,36,.97);border:1px solid var(--line-2);box-shadow:0 30px 70px -20px #000;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+#panel.open{display:block;animation:rise .22s ease}
+#panel h3{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--txt-faint);padding:9px 11px 7px}
+.srow{display:flex;gap:10px;padding:10px 11px;border-radius:11px;align-items:flex-start}
+.srow+.srow{margin-top:2px}
+.srow:hover{background:rgba(255,255,255,.04)}
+.srow .sd{flex:none;width:8px;height:8px;border-radius:50%;margin-top:5px;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.srow.err .sd{background:var(--danger);box-shadow:0 0 8px var(--danger)}
+.srow.warnrow .sd{background:var(--gold);box-shadow:0 0 8px var(--gold)}
+.srow .sb{min-width:0;flex:1}
+.srow .sn{font-size:13px;font-weight:650;color:var(--txt);display:flex;gap:8px;align-items:baseline}
+.srow .sn span{font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt-faint)}
+.srow .sm{font-size:11.5px;color:var(--txt-dim);line-height:1.55;margin-top:3px;word-break:break-word}
+.srow .sm code{font-family:var(--mono);font-size:10.5px;color:var(--gold)}
+.srow .sm a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="aurora"><span></span><span></span><span></span><span></span></div>
+<div id="grid"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="mark" id="brandMark">&#9654;</div>
+    <div><b id="brandName">Random Clip Picker</b><small id="brandSub" hidden></small></div>
+  </div>
+  <div class="toolset">
+    <button class="chip" id="srcChip" type="button" title="Where the clip list came from"><span class="dot"></span><span id="srcTxt">loading</span></button>
+    <label class="chip" id="loadChip" title="Load a clips.json from anywhere on this computer">&#128193; Load list<input type="file" id="fileIn" accept=".json,application/json"></label>
+    <button class="chip" id="sndChip" type="button" aria-pressed="true" title="Toggle sound">&#9835; Sound</button>
+  </div>
+</header>
+
+<main class="stage">
+  <div>
+    <h1><span id="headA">Time for a</span> <em id="headB">Break</em></h1>
+    <p class="sub" id="subtitle" hidden style="margin-top:10px"></p>
+  </div>
+  <section class="machine" id="machine">
+    <div class="bulbs t" id="bulbT"></div>
+    <div class="bulbs b" id="bulbB"></div>
+    <div class="counter"><span class="num" id="counter">--&nbsp;/&nbsp;--</span></div>
+    <div class="window" id="window">
+      <div class="payline"><i class="l"></i><i class="r"></i></div>
+      <div class="strip" id="strip"></div>
+    </div>
+    <button class="spin" id="spinBtn" type="button"><span>SPIN</span></button>
+  </section>
+</main>
+
+<div id="panel" role="dialog" aria-label="Clip sources"><h3>Clip sources</h3><div id="panelBody"></div></div>
+
+<canvas id="confetti"></canvas>
+<div id="toast"></div>
+
+<div id="player" role="dialog" aria-modal="true" aria-label="Clip player">
+  <div class="player-wrap" id="wrap">
+    <div class="p-head">
+      <div class="meta">
+        <div class="tp"><span id="pTopic"></span><b id="pKind"></b></div>
+        <div class="ti" id="pTitle"></div>
+        <div class="cr" id="pCreator"></div>
+      </div>
+      <button class="iconbtn" id="closeBtn" type="button" title="Close (Esc)" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <div class="shell" id="shell">
+      <div class="loading" id="loading"><div class="spinner"></div></div>
+      <div class="endcard" id="endcard">
+        <p>Clip finished</p>
+        <button class="btn primary" style="flex:none;padding:0 22px" id="endReplay" type="button">
+          <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg> Play again
+        </button>
+      </div>
+      <div class="errcard" id="errcard">
+        <div class="h" id="errH"></div>
+        <div class="d" id="errD"></div>
+      </div>
+    </div>
+
+    <div class="p-bar">
+      <button class="btn primary" id="replayBtn" type="button">
+        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg> Replay
+      </button>
+      <button class="btn" id="fsBtn" type="button">
+        <svg id="fsIcon" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+        <span id="fsTxt">Fullscreen</span>
+      </button>
+      <button class="btn ghost" id="openBtn" type="button" title="Open the original">
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
+      </button>
+      <button class="btn ghost" id="againBtn" type="button" title="Close and spin again">
+        <svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M20 9A8 8 0 0 0 6.3 5.3L4 8"/><path d="M4 15a8 8 0 0 0 13.7 3.7L20 16"/></svg>
+      </button>
+    </div>
+    <p class="p-note" id="pNote" hidden></p>
+  </div>
+</div>
+
+<script type="application/json" id="fallback">
+{"clips":[
+{"title": "How to Value a Company - Part 1: Free Cash Flow", "creator": "Benevolent Brokers", "topic": "Valuation / Free Cash Flow", "src": "https://www.instagram.com/reel/DV-g3wmDaLe/", "id": 1},
+{"title": "Cash Flow Is Not the Same as Profitability", "creator": "Nosakhare Tunde-Oni", "topic": "Financial Statements / Cash Flow", "src": "https://www.instagram.com/reel/DbTc4RARpM8/", "id": 2},
+{"title": "How to Read a Balance Sheet", "creator": "Brian Feroldi", "topic": "Financial Statements / Balance Sheet", "src": "https://www.instagram.com/reel/C5waK5hCueF/", "id": 3},
+{"title": "Inflation, Explained in Under 60 Seconds", "creator": "Asia School of Business", "topic": "Inflation / Macro Context", "src": "https://www.instagram.com/reel/DQT-B4hDeBT/", "id": 4},
+{"title": "Compound Interest Explained (Pop-Culture Analogy)", "creator": "Ethan Zhou", "topic": "Time Value of Money", "src": "https://www.instagram.com/reel/DUxvYljkbpI/", "id": 5},
+{"title": "What Is Compound Interest?", "creator": "Muhammad Lambat | Halal Investing", "topic": "Time Value of Money", "src": "https://www.instagram.com/reel/C0-AdLmLrvl/", "id": 6},
+{"title": "Why Start Investing NOW", "creator": "Investa", "topic": "Time Value of Money / Investing", "src": "https://www.instagram.com/reel/DGkuYTxNfC9/", "id": 7},
+{"title": "There Is No Investing Without Risk", "creator": "Financial Markets Authority", "topic": "Risk and Return", "src": "https://www.instagram.com/reel/DWU3fhODy8D/", "id": 8},
+{"title": "Diversification Means Spreading Your Risk", "creator": "The Market Hustle", "topic": "Risk and Return / Portfolio", "src": "https://www.instagram.com/reel/DINQmPovQz7/", "id": 9},
+{"title": "The Fed Held Interest Rates Steady", "creator": "C-SPAN", "topic": "Interest Rates / Monetary Policy", "src": "https://www.instagram.com/reel/DZuvMeroodu/", "id": 10}
+]}
+</script>
+
+<script>
+(function(){
+"use strict";
+
+/* =====================================================================
+   WHERE THE CLIP LIST COMES FROM
+   ---------------------------------------------------------------------
+   1. ?clips=<url>            e.g. ...Random-Clip-Picker.html?clips=lists/fall2026.json
+   2. DATA_URL below          set it if your clips.json lives somewhere else
+   3. clips.json              next to this file  (the normal case)
+   4. the built-in copy       baked into this file, so double-clicking still works
+   Plus the "Load list" button in the top bar, which can open a clips.json from ANY
+   folder on this computer - including a Google Drive folder - because you pick the
+   file yourself. A browser is not allowed to fetch an arbitrary local path on its own.
+   ===================================================================== */
+var DATA_URL = "";
+
+var $=function(id){return document.getElementById(id);};
+var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),counter=$("counter"),
+    player=$("player"),wrap=$("wrap"),shell=$("shell"),loading=$("loading"),endcard=$("endcard"),
+    errcard=$("errcard"),errH=$("errH"),errD=$("errD"),
+    pTopic=$("pTopic"),pKind=$("pKind"),pTitle=$("pTitle"),pCreator=$("pCreator"),pNote=$("pNote"),
+    replayBtn=$("replayBtn"),endReplay=$("endReplay"),fsBtn=$("fsBtn"),fsTxt=$("fsTxt"),fsIcon=$("fsIcon"),
+    openBtn=$("openBtn"),againBtn=$("againBtn"),closeBtn=$("closeBtn"),
+    srcChip=$("srcChip"),srcTxt=$("srcTxt"),sndChip=$("sndChip"),fileIn=$("fileIn"),toastEl=$("toast"),
+    panel=$("panel"),panelBody=$("panelBody");
+
+var CLIPS=[],SOURCE="built-in copy",spinning=false,current=null,loadTimer=null,msgHook=null;
+var PAGE_IS_LOCAL = location.protocol === "file:";
+
+/* ---------------- helpers ---------------- */
+function randInt(max){
+  if(max<=1) return 0;
+  var limit=Math.floor(4294967296/max)*max, b=new Uint32Array(1), x;
+  do{ (window.crypto||window.msCrypto).getRandomValues(b); x=b[0]; }while(x>=limit);
+  return x%max;
+}
+function toast(msg,ms){
+  toastEl.textContent=msg; toastEl.classList.add("show");
+  clearTimeout(toast._t); toast._t=setTimeout(function(){toastEl.classList.remove("show");},ms||4600);
+}
+var actx=null,sound=true;
+function tone(freq,dur,type,vol){
+  if(!sound) return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==="suspended") actx.resume();
+    var o=actx.createOscillator(),g=actx.createGain(),t=actx.currentTime;
+    o.type=type||"square"; o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.045,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+dur+0.03);
+  }catch(e){}
+}
+function fanfare(){ [523.25,659.25,783.99,1046.5].forEach(function(f,i){ setTimeout(function(){tone(f,0.26,"triangle",0.075);}, i*95); }); }
+
+/* =====================================================================
+   SOURCE ENGINE - one "src" per clip, the kind is worked out from it.
+   Override by setting "kind" explicitly on the clip if you ever need to.
+   ===================================================================== */
+var KINDS={
+  instagram:{label:"Instagram", ar:[4,5],  autoplay:false, ended:false},
+  youtube:  {label:"YouTube",   ar:[16,9], autoplay:true,  ended:true },
+  vimeo:    {label:"Vimeo",     ar:[16,9], autoplay:true,  ended:true },
+  gdrive:   {label:"Google Drive", ar:[16,9], autoplay:false, ended:false},
+  file:     {label:"Video file",ar:[9,16], autoplay:true,  ended:true }
+};
+
+function detect(raw){
+  var s=String(raw||"").trim(), m;
+  if(!s) return null;
+  if((m=/instagram\.com\/(?:[A-Za-z0-9_.]+\/)?(?:reels?|p|tv)\/([A-Za-z0-9_-]+)/i.exec(s))) return {kind:"instagram",id:m[1]};
+  if((m=/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/i.exec(s))) return {kind:"youtube",id:m[1]};
+  if((m=/vimeo\.com\/(?:video\/)?(\d{6,})/i.exec(s))) return {kind:"vimeo",id:m[1]};
+  if((m=/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:.*&)?id=)([A-Za-z0-9_-]{6,})/i.exec(s))) return {kind:"gdrive",id:m[1]};
+  return {kind:"file",id:null};
+}
+
+/* Turns whatever the JSON holds into something a <video src> understands:
+   "H:\\clips\\a.mp4" -> file:///H:/clips/a.mp4      (Windows / Google Drive desktop)
+   "\\\\nas\\clips\\a.mp4" -> file://nas/clips/a.mp4 (network share)
+   "videos/a.mp4"     -> left alone                  (relative, works everywhere)
+   "https://.../a.mp4"-> left alone                                            */
+function toUrl(raw){
+  var s=String(raw||"").trim();
+  if(/^(https?|file|blob|data):/i.test(s)) return s;
+  if(/^[A-Za-z]:[\\\/]/.test(s)) return "file:///"+s.replace(/\\/g,"/");
+  if(/^\\\\/.test(s)) return "file:"+s.replace(/\\/g,"/");
+  return s.replace(/\\/g,"/");
+}
+function srcOf(c){ return c.src || c.embedUrl || c.url || c.localFile || ""; }
+function kindOf(c){
+  var d=detect(srcOf(c)) || {kind:"file",id:null};
+  // an explicit fileId from the source that produced this clip always wins over
+  // whatever can be scraped back out of the URL
+  var id=c.fileId||d.id;
+  if(c.kind && KINDS[c.kind]) return {kind:c.kind, id:id};
+  return {kind:d.kind, id:id};
+}
+function setRatio(w,h){
+  if(!w||!h) return;
+  wrap.style.setProperty("--arW",w); wrap.style.setProperty("--arH",h);
+  requestAnimationFrame(syncWidth);
+}
+/* copy the shell's real width onto the header / control bar so they always line up */
+function syncWidth(){
+  // offsetWidth, not getBoundingClientRect: the wrap plays a scale() intro animation and
+  // a transformed rect would hand back a width ~3.5% short, leaving the bar misaligned.
+  var w=shell.offsetWidth;
+  if(w>0) wrap.style.setProperty("--w", w+"px");
+}
+
+/* ---------------- marquee bulbs ---------------- */
+(function(){
+  [$("bulbT"),$("bulbB")].forEach(function(rail,r){
+    var n=18,h="";
+    for(var i=0;i<n;i++) h+='<i style="animation-delay:'+(((r?n-i:i)*0.075).toFixed(3))+'s"></i>';
+    rail.innerHTML=h;
+  });
+})();
+
+/* ---------------- confetti ---------------- */
+var cv=$("confetti"),cx=cv.getContext("2d"),parts=[],raf=null;
+function sizeCanvas(){ var d=window.devicePixelRatio||1; cv.width=innerWidth*d; cv.height=innerHeight*d; cx.setTransform(d,0,0,d,0,0); }
+sizeCanvas(); addEventListener("resize",sizeCanvas);
+function burst(){
+  var cols=["#31e0c0","#4d8dff","#ffc861","#ffffff","#8b5cf6"];
+  for(var i=0;i<130;i++){
+    parts.push({x:innerWidth/2+(Math.random()-0.5)*260,y:innerHeight*0.44,
+      vx:(Math.random()-0.5)*11,vy:-(Math.random()*13+5),g:0.32+Math.random()*0.16,
+      w:5+Math.random()*6,h:8+Math.random()*8,r:Math.random()*6.28,vr:(Math.random()-0.5)*0.32,
+      c:cols[(Math.random()*cols.length)|0],life:1});
+  }
+  if(!raf) raf=requestAnimationFrame(tickCanvas);
+}
+function tickCanvas(){
+  cx.clearRect(0,0,innerWidth,innerHeight);
+  for(var i=parts.length-1;i>=0;i--){
+    var p=parts[i]; p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.r+=p.vr; p.life-=0.0072;
+    if(p.life<=0||p.y>innerHeight+60){ parts.splice(i,1); continue; }
+    cx.save(); cx.translate(p.x,p.y); cx.rotate(p.r); cx.globalAlpha=Math.max(0,p.life);
+    cx.fillStyle=p.c; cx.fillRect(-p.w/2,-p.h/2,p.w,p.h); cx.restore();
+  }
+  if(parts.length){ raf=requestAnimationFrame(tickCanvas); } else { raf=null; cx.clearRect(0,0,innerWidth,innerHeight); }
+}
+
+/* ---------------- slot machine ---------------- */
+var LOOPS=8, stopIndex=0;
+function cellH(){ var c=strip.firstElementChild; return c?c.getBoundingClientRect().height:win.clientHeight; }
+function buildStrip(targetIdx){
+  var n=CLIPS.length,total=LOOPS*n+n,frag=document.createDocumentFragment(),i;
+  for(i=0;i<total;i++){
+    var c=CLIPS[i%n],cell=document.createElement("div");
+    cell.className="cell";
+    var t=document.createElement("div"); t.className="t"; t.textContent=c.title;
+    var m=document.createElement("div"); m.className="m"; m.textContent=c.topic||KINDS[kindOf(c).kind].label;
+    cell.appendChild(t); cell.appendChild(m); frag.appendChild(cell);
+  }
+  strip.innerHTML=""; strip.appendChild(frag);
+  return LOOPS*n+targetIdx;
+}
+function setCounter(i){ var c=CLIPS[i]; if(c) counter.textContent=("0"+(c.id||i+1)).slice(-2)+" / "+("0"+CLIPS.length).slice(-2); }
+function idle(){
+  if(!CLIPS.length) return;
+  var i=randInt(CLIPS.length);
+  buildStrip(i);
+  strip.style.transform="translate3d(0,"+(-(LOOPS*CLIPS.length+i)*cellH())+"px,0)";
+  setCounter(i);
+}
+function spin(){
+  if(spinning||!CLIPS.length) return;
+  spinning=true; spinBtn.disabled=true; win.classList.remove("won"); machine.classList.add("hot");
+  var old=win.querySelector(".cell.hit"); if(old) old.classList.remove("hit");
+  var n=CLIPS.length,target=randInt(n);
+  stopIndex=buildStrip(target);
+  var H=cellH(),dist=stopIndex*H,DUR=4300,t0=performance.now(),lastY=0,lastIdx=-1;
+  strip.style.transform="translate3d(0,0,0)";
+  tone(180,0.12,"sawtooth",0.05);
+  function ease(t){ return 1-Math.pow(1-t,4); }
+  function frame(now){
+    var t=Math.min(1,(now-t0)/DUR), y=-dist*ease(t), speed=Math.abs(y-lastY); lastY=y;
+    strip.style.transform="translate3d(0,"+y+"px,0)";
+    strip.style.filter= speed>2 ? "blur("+Math.min(5.5,speed*0.075)+"px)" : "none";
+    var idx=Math.round(-y/H);
+    if(idx!==lastIdx){ lastIdx=idx; setCounter(idx%n); if(speed<26) tone(760+randInt(200),0.028,"square",0.03); }
+    if(t<1){ requestAnimationFrame(frame); }
+    else{
+      strip.style.filter="none";
+      strip.style.transform="translate3d(0,"+(-dist)+"px,0)";
+      setCounter(target);
+      var cells=strip.children; if(cells[stopIndex]) cells[stopIndex].classList.add("hit");
+      win.classList.add("won"); machine.classList.remove("hot"); fanfare(); burst();
+      current=CLIPS[target];
+      setTimeout(function(){ spinning=false; spinBtn.disabled=false; openPlayer(current); },760);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* =====================================================================
+   RENDERERS
+   ===================================================================== */
+function clearMedia(){
+  clearTimeout(loadTimer);
+  if(msgHook){ window.removeEventListener("message",msgHook); msgHook=null; }
+  var m=shell.querySelectorAll("iframe,video"),i;
+  for(i=0;i<m.length;i++){ try{ m[i].pause&&m[i].pause(); }catch(e){} m[i].removeAttribute("src"); m[i].remove(); }
+  shell.classList.remove("ig");
+  endcard.classList.remove("show"); errcard.classList.remove("show");
+}
+function showError(h,d){
+  loading.classList.add("gone");
+  errH.textContent=h; errD.innerHTML=d;
+  errcard.classList.add("show");
+}
+function mkFrame(src,extraAllow){
+  var f=document.createElement("iframe");
+  f.setAttribute("allow","autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share; fullscreen"+(extraAllow?"; "+extraAllow:""));
+  f.setAttribute("allowfullscreen","true");
+  f.setAttribute("scrolling","no");
+  f.setAttribute("frameborder","0");
+  f.addEventListener("load",function(){ loading.classList.add("gone"); });
+  f.src=src;
+  loadTimer=setTimeout(function(){ loading.classList.add("gone"); },6000);
+  return f;
+}
+function bust(u){ return u+(u.indexOf("?")>-1?"&":"?")+"_="+Date.now(); }
+
+var RENDER={
+  instagram:function(clip,info){
+    shell.classList.add("ig");
+    var f=mkFrame(bust("https://www.instagram.com/reel/"+info.id+"/embed/"));
+    // Instagram wraps the whole media area in <a target="_blank">, so a click on a
+    // finished clip jumps to instagram.com. No allow-popups / allow-top-navigation
+    // in the sandbox makes every one of those links inert; playback is untouched.
+    f.setAttribute("sandbox","allow-scripts allow-same-origin allow-presentation");
+    shell.appendChild(f);
+    return "Instagram embed, chrome cropped and click-through disabled. Its player has no JavaScript API: one click to start, it loops, and it never reports the end. Use Replay or ✕.";
+  },
+
+  youtube:function(clip,info){
+    var src="https://www.youtube-nocookie.com/embed/"+info.id+
+      "?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&origin="+encodeURIComponent(location.origin);
+    var f=mkFrame(src);
+    shell.appendChild(f);
+    // YouTube's iframe speaks a small postMessage protocol; asking to listen for
+    // onStateChange gives a real "ended" signal (state 0) without loading their SDK.
+    msgHook=function(e){
+      if(!/youtube(-nocookie)?\.com$/.test((e.origin||"").replace(/^https?:\/\//,""))) return;
+      var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(err){ return; } }
+      if(!d||d.event!=="onStateChange"&&d.event!=="infoDelivery") return;
+      var st = d.event==="onStateChange" ? d.info : (d.info&&d.info.playerState);
+      if(st===0) endcard.classList.add("show");
+      if(st===1) endcard.classList.remove("show");
+    };
+    window.addEventListener("message",msgHook);
+    f.addEventListener("load",function(){
+      try{
+        f.contentWindow.postMessage(JSON.stringify({event:"listening",id:1,channel:"widget"}),"*");
+        f.contentWindow.postMessage(JSON.stringify({event:"command",func:"addEventListener",args:["onStateChange"],id:1,channel:"widget"}),"*");
+      }catch(err){}
+    });
+    return "YouTube embed. Starts on its own, plays once, and tells this page when it ends.";
+  },
+
+  vimeo:function(clip,info){
+    var f=mkFrame("https://player.vimeo.com/video/"+info.id+"?autoplay=1&loop=0&title=0&byline=0&portrait=0&dnt=1");
+    shell.appendChild(f);
+    msgHook=function(e){
+      if(!/player\.vimeo\.com$/.test((e.origin||"").replace(/^https?:\/\//,""))) return;
+      var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(err){ return; } }
+      if(!d) return;
+      if(d.event==="ready"){ try{ f.contentWindow.postMessage(JSON.stringify({method:"addEventListener",value:"ended"}),"*"); }catch(err){} }
+      if(d.event==="ended") endcard.classList.add("show");
+      if(d.event==="play") endcard.classList.remove("show");
+    };
+    window.addEventListener("message",msgHook);
+    return "Vimeo embed. Starts on its own, plays once, and reports the end.";
+  },
+
+  gdrive:function(clip,info){
+    var f=mkFrame("https://drive.google.com/file/d/"+info.id+"/preview");
+    shell.appendChild(f);
+    return "Google Drive preview player. The file must be shared as “Anyone with the link”. Drive’s player needs a click to start and reports nothing back, so use Replay or ✕.";
+  },
+
+  file:function(clip){
+    var url=toUrl(srcOf(clip));
+    if(!PAGE_IS_LOCAL && /^file:/i.test(url)){
+      showError("This page cannot open a file on your disk",
+        "The page is being served over <code>"+location.protocol+"</code>, and browsers refuse to load <code>file:///</code> media from an <code>http(s)</code> page. "+
+        "Either open the HTML by double-clicking it, or put the video inside this folder and use a relative path such as <code>videos/clip.mp4</code>.");
+      return "Blocked: local path from a served page.";
+    }
+    var v=document.createElement("video");
+    v.setAttribute("playsinline",""); v.controls=true; v.loop=false; v.preload="metadata"; v.autoplay=true;
+    v.addEventListener("loadedmetadata",function(){ setRatio(v.videoWidth,v.videoHeight); });
+    v.addEventListener("loadeddata",function(){
+      loading.classList.add("gone");
+      // the SPIN click already gave this document user activation, so sound is allowed;
+      // if the browser still refuses, fall back to muted rather than sitting frozen.
+      v.play().catch(function(){
+        v.muted=true;
+        v.play().then(function(){ toast("Your browser blocked audio on autoplay - press the speaker in the video controls to unmute."); })
+                .catch(function(){ toast("Autoplay was blocked. Press play on the video."); });
+      });
+    });
+    v.addEventListener("ended",function(){ endcard.classList.add("show"); });
+    v.addEventListener("play",function(){ endcard.classList.remove("show"); });
+    v.addEventListener("error",function(){
+      showError("This video would not load",
+        "<code>"+url.replace(/</g,"&lt;")+"</code><br><br>Check the path in clips.json, and that the file is a format the browser plays (mp4/H.264, webm, ogv).");
+    });
+    v.src=url;
+    shell.appendChild(v);
+    return "Local/direct video file - autoplays, plays once, and shows Play again at the end.";
+  }
+};
+
+function mount(clip){
+  clearMedia();
+  loading.classList.remove("gone");
+  var info=kindOf(clip), def=KINDS[info.kind]||KINDS.file;
+  setRatio(def.ar[0],def.ar[1]);
+  if(info.kind!=="file" && !info.id){
+    showError("Could not read this link", "<code>"+String(srcOf(clip)).replace(/</g,"&lt;")+"</code><br><br>It looks like a "+def.label+" link but no video id could be found in it.");
+    pNote.textContent=""; return;
+  }
+  pKind.textContent="· "+def.label;
+  pNote.textContent = RENDER[info.kind](clip,info) || "";   // hidden; kept as the tooltip
+  shell.title = pNote.textContent;
+  requestAnimationFrame(syncWidth);
+}
+function openPlayer(clip){
+  if(!clip) return;
+  current=clip;
+  pTopic.textContent=clip.topic||"";
+  pTitle.textContent=clip.title||"";
+  pCreator.textContent=clip.creator?("by "+clip.creator):"";
+  var link=clip.link||clip.url||srcOf(clip);
+  openBtn.hidden = kindOf(clip).kind==="file" || !/^https?:/i.test(String(link));
+  openBtn.onclick=function(){ window.open(link,"_blank","noopener"); };
+  mount(clip);
+  player.classList.add("open");
+  closeBtn.focus();
+}
+function closePlayer(){
+  if(document.fullscreenElement){ try{document.exitFullscreen();}catch(e){} }
+  player.classList.remove("open");
+  clearMedia();
+  spinBtn.focus();
+}
+function replay(){
+  var v=shell.querySelector("video");
+  if(v && !v.error){ endcard.classList.remove("show"); v.currentTime=0; v.play().catch(function(){}); return; }
+  if(current) mount(current);
+}
+function toggleFS(){
+  if(document.fullscreenElement||document.webkitFullscreenElement){
+    (document.exitFullscreen||document.webkitExitFullscreen).call(document);
+  }else{
+    var r=player.requestFullscreen||player.webkitRequestFullscreen||player.msRequestFullscreen;
+    if(r) r.call(player); else toast("Fullscreen is not available in this browser.");
+  }
+}
+function syncFS(){
+  var on=!!(document.fullscreenElement||document.webkitFullscreenElement);
+  fsTxt.textContent=on?"Exit":"Fullscreen";
+  fsIcon.innerHTML=on
+    ? '<path d="M8 3v3a2 2 0 0 1-2 2H3M16 3v3a2 2 0 0 0 2 2h3M8 21v-3a2 2 0 0 0-2-2H3M16 21v-3a2 2 0 0 1 2-2h3"/>'
+    : '<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>';
+  requestAnimationFrame(syncWidth);
+}
+
+/* ---------------- wiring ---------------- */
+spinBtn.addEventListener("click",spin);
+closeBtn.addEventListener("click",closePlayer);
+replayBtn.addEventListener("click",replay);
+endReplay.addEventListener("click",replay);
+fsBtn.addEventListener("click",toggleFS);
+againBtn.addEventListener("click",function(){ closePlayer(); setTimeout(spin,180); });
+document.addEventListener("fullscreenchange",syncFS);
+document.addEventListener("webkitfullscreenchange",syncFS);
+window.addEventListener("resize",function(){ if(!spinning) idle(); syncWidth(); });
+player.addEventListener("click",function(e){ if(e.target===player) closePlayer(); });
+
+sndChip.addEventListener("click",function(){
+  sound=!sound; sndChip.setAttribute("aria-pressed",String(sound));
+  sndChip.innerHTML = sound ? "&#9835; Sound" : "&#9834; Muted";
+  if(sound) tone(880,0.08,"triangle",0.05);
+});
+srcChip.addEventListener("click",function(e){ e.stopPropagation(); panel.classList.toggle("open"); });
+document.addEventListener("click",function(e){ if(!panel.contains(e.target)&&e.target!==srcChip) panel.classList.remove("open"); });
+
+fileIn.addEventListener("change",function(){
+  var f=fileIn.files&&fileIn.files[0]; if(!f) return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{
+      var j=JSON.parse(r.result);
+      if(!j||(!Array.isArray(j.clips)&&!Array.isArray(j.sources))) throw new Error("no clips or sources array");
+      loadDoc(j,f.name);
+      toast("Loaded "+f.name+".");
+    }catch(err){ toast("That file is not a valid clips.json ("+err.message+")."); }
+  };
+  r.readAsText(f); fileIn.value="";
+});
+
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"){
+    if(player.classList.contains("open") && !(document.fullscreenElement||document.webkitFullscreenElement)) closePlayer();
+    return;
+  }
+  if(player.classList.contains("open")){
+    if(e.key==="f"||e.key==="F"){ e.preventDefault(); toggleFS(); }
+    if(e.key==="r"||e.key==="R"){ e.preventDefault(); replay(); }
+    return;
+  }
+  if(e.key===" "||e.key==="Enter"){
+    if(document.activeElement&&document.activeElement.tagName==="BUTTON") return;
+    e.preventDefault(); spin();
+  }
+});
+
+/* =====================================================================
+   SOURCES - everything the page loads is declared in clips.json.
+   "sources" is a list; each entry is resolved at load time and all of the
+   results are merged into one random pool.
+
+     { "type":"clips",        "clips":[ ... ] }                inline list
+     { "type":"folder",       "path":"videos/" }               a folder of video files
+     { "type":"gdriveFolder", "folder":"<share link>", "apiKey":"..." }
+     { "type":"json",         "url":"more-clips.json" }        another list file
+
+   Add "enabled": false to any of them to switch it off without deleting it.
+   ===================================================================== */
+var VIDEO_EXT=/\.(mp4|webm|m4v|mov|ogv|ogg)$/i;
+var STATUS=[];
+
+function niceTitle(name){
+  var t=name.replace(/\.[^.]+$/,"");
+  t=t.replace(/^\d{1,3}[\s._-]+/,"").replace(/[._-]+/g," ").replace(/\s{2,}/g," ").trim();
+  if(t===t.toLowerCase()) t=t.split(" ").map(function(w){ return w.length<=2?w:w.charAt(0).toUpperCase()+w.slice(1); }).join(" ");
+  return t||name;
+}
+function tagClips(list,s){
+  return (list||[]).filter(function(c){ return c && srcOf(c) && c.disabled!==true; })
+    .map(function(c){
+      var o={},k; for(k in c) o[k]=c[k];
+      if(!o.topic && s.topic) o.topic=s.topic;
+      o._src=s.name||s.id||s.type;
+      return o;
+    });
+}
+function esc(x){ return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+
+/* -- a folder of video files -------------------------------------------
+   First it asks the server for a directory listing (start.bat's Python server,
+   nginx autoindex and friends all produce one). GitHub Pages does not serve
+   listings, so it falls back to the "manifest" array that sync-clips.py writes
+   into this source. Either way the folder ends up in the pool.            */
+function loadFolder(s){
+  var base=String(s.path||"").replace(/\/*$/,"/");
+  function fromManifest(why){
+    var man=(s.manifest||[]).filter(function(n){ return VIDEO_EXT.test(n); });
+    // nothing listed and nothing in the manifest is an empty folder, not a failure
+    if(!man.length) return { clips:[], warn:true,
+      msg:"no files. Live listing unavailable ("+esc(why)+") and the <code>manifest</code> in clips.json is empty." };
+    return { clips: tagClips(man.map(function(n){
+               return {title:niceTitle(n),topic:s.topic||"Local clip",src:base+encodeURIComponent(n)};
+             }),s),
+             warn:true,
+             msg:man.length+" file(s) from the <code>manifest</code> in clips.json. Live listing unavailable ("+esc(why)+"). Run sync-clips.bat after adding files." };
+  }
+  if(PAGE_IS_LOCAL) return Promise.resolve(fromManifest("the page was opened straight from disk"));
+  return fetch(base,{cache:"no-store"})
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.text(); })
+    .then(function(html){
+      var doc=new DOMParser().parseFromString(html,"text/html"),out=[],seen={};
+      Array.prototype.forEach.call(doc.querySelectorAll("a[href]"),function(a){
+        var h=(a.getAttribute("href")||"").split("?")[0].split("#")[0];
+        var name=decodeURIComponent(h.replace(/^.*\//,""));
+        if(!VIDEO_EXT.test(name)||seen[name]) return;
+        seen[name]=1;
+        out.push({title:niceTitle(name),topic:s.topic||"Local clip",src:base+encodeURIComponent(name)});
+      });
+      if(!out.length) throw new Error("the directory listing held no video files");
+      return { clips:tagClips(out,s), msg:out.length+" file(s) read live from <code>"+esc(base)+"</code>" };
+    })
+    .catch(function(e){ return fromManifest(e.message); });
+}
+
+/* -- a shared Google Drive folder --------------------------------------
+   Drive refuses to list a folder to an anonymous caller: "Method doesn't allow
+   unregistered callers. Please use API Key". So this needs a free Google API
+   key with the Drive API enabled. The folder itself must be shared as
+   "Anyone with the link - Viewer"; files inside inherit that.              */
+function loadDrive(s){
+  var raw=s.folder||s.url||s.folderId||"";
+  var m=/folders\/([-\w]+)/.exec(raw)||/([-\w]{20,})/.exec(raw);
+  if(!m) return Promise.reject(new Error("could not find a folder id in <code>"+esc(raw)+"</code>"));
+  var id=m[1];
+  if(!s.apiKey) return Promise.reject(new Error(
+     "no <code>apiKey</code> set. Google will not list a folder to an anonymous caller. "+
+     "Create a free key at <b>console.cloud.google.com</b> → enable <b>Google Drive API</b> → Credentials → API key, "+
+     "then paste it into this source in clips.json."));
+  var q="'"+id+"' in parents and trashed = false";
+  var url="https://www.googleapis.com/drive/v3/files"+
+    "?q="+encodeURIComponent(q)+
+    "&key="+encodeURIComponent(s.apiKey)+
+    "&fields="+encodeURIComponent("files(id,name,mimeType)")+
+    "&pageSize=200&orderBy=name&supportsAllDrives=true&includeItemsFromAllDrives=true";
+  return fetch(url,{cache:"no-store"})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,status:r.status,j:j}; }); })
+    .then(function(res){
+      if(!res.ok){
+        var em=(res.j&&res.j.error&&res.j.error.message)||("HTTP "+res.status);
+        throw new Error(esc(em));
+      }
+      var files=(res.j.files||[]).filter(function(f){ return /^video\//.test(f.mimeType||""); });
+      if(!files.length) return { clips:[], warn:true,
+        msg:"the folder is reachable but holds no video files yet ("+((res.j.files||[]).length)+" item(s) of other types)" };
+      return { clips:tagClips(files.map(function(f){
+                 return {title:niceTitle(f.name),topic:s.topic||"Drive clip",
+                         src:"https://drive.google.com/file/d/"+f.id+"/preview",
+                         link:"https://drive.google.com/file/d/"+f.id+"/view",
+                         kind:"gdrive", fileId:f.id};
+               }),s),
+               msg:files.length+" video(s) listed from the shared Drive folder" };
+    });
+}
+
+function loadJsonSource(s,depth){
+  if(depth>3) return Promise.reject(new Error("nested too deep"));
+  return fetch(toUrl(s.url),{cache:"no-store"})
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(j){ return resolveAll(sourcesOf(j),depth+1).then(function(c){
+        return { clips:c, msg:c.length+" clip(s) from <code>"+esc(s.url)+"</code>" }; }); });
+}
+
+/* Every label on the page comes from "meta" in clips.json, so one deployment can
+   serve any course - or several, via ?clips=acc302.json */
+function applyBranding(meta){
+  meta=meta||{};
+  var name=meta.appName||"Random Clip Picker";
+  var course=[meta.course,meta.courseName].filter(Boolean).join(" \u00b7 ");
+  document.title = course ? (meta.course||course)+" \u00b7 "+name : name;
+  $("brandName").textContent=name;
+  var mark=$("brandMark"), badge=meta.badge||"\u25b6";
+  mark.textContent=badge;
+  mark.style.fontSize = /[^\x00-\x7F]/.test(badge) ? "17px" : "";
+  var sub=$("brandSub");
+  sub.textContent=course; sub.hidden=!course;
+  if(meta.heading)       $("headA").textContent=meta.heading;
+  if(meta.headingAccent) $("headB").textContent=meta.headingAccent;
+  var st=$("subtitle"); st.textContent=meta.subtitle||""; st.hidden=!meta.subtitle;
+}
+
+function sourcesOf(doc){
+  if(doc && Array.isArray(doc.sources) && doc.sources.length) return doc.sources;
+  return [{id:"clips",type:"clips",name:"Inline list",clips:(doc&&doc.clips)||[]}];
+}
+
+function resolveOne(s,depth){
+  var name=s.name||s.id||s.type||"source";
+  var t=(s.type||"clips").toLowerCase();
+  var p;
+  if(s.enabled===false) return Promise.resolve({name:name,type:t,clips:[],skipped:true,msg:"disabled in clips.json"});
+  try{
+    if(t==="clips")            p=Promise.resolve({clips:tagClips(s.clips,s),msg:tagClips(s.clips,s).length+" clip(s) listed in clips.json"});
+    else if(t==="folder")      p=loadFolder(s);
+    else if(t==="gdrivefolder")p=loadDrive(s);
+    else if(t==="json")        p=loadJsonSource(s,depth||0);
+    else p=Promise.reject(new Error('unknown source type "'+esc(t)+'"'));
+  }catch(e){ p=Promise.reject(e); }
+  return p.then(function(r){ return {name:name,type:t,clips:r.clips||[],msg:r.msg,warn:r.warn}; })
+          .catch(function(e){ return {name:name,type:t,clips:[],error:true,msg:e.message||String(e)}; });
+}
+function resolveAll(list,depth){
+  return Promise.all(list.map(function(s){ return resolveOne(s,depth||0); }))
+    .then(function(rs){
+      if(!depth) STATUS=rs;
+      var out=[],seen={};
+      rs.forEach(function(r){ r.clips.forEach(function(c){
+        var k=String(srcOf(c)).toLowerCase();
+        if(seen[k]) return; seen[k]=1; out.push(c);
+      });});
+      return out;
+    });
+}
+
+function renderPanel(label){
+  var h='<div class="srow"><i class="sd"></i><div class="sb"><div class="sn">clips.json <span>'+esc(label)+'</span></div>'+
+        '<div class="sm">'+CLIPS.length+' clip(s) in the random pool</div></div></div>';
+  STATUS.forEach(function(r){
+    var cls=r.error?"err":(r.warn||r.skipped?"warnrow":"");
+    h+='<div class="srow '+cls+'"><i class="sd"></i><div class="sb">'+
+       '<div class="sn">'+esc(r.name)+' <span>'+esc(r.type)+'</span></div>'+
+       '<div class="sm">'+(r.error?"<b>failed:</b> ":"")+(r.msg||"")+'</div></div></div>';
+  });
+  panelBody.innerHTML=h;
+}
+
+/* ---------------- boot ---------------- */
+function start(clips,label){
+  CLIPS=clips.map(function(c,i){ if(!c.id) c.id=i+1; if(!c.title) c.title="Clip "+(i+1); return c; });
+  SOURCE=label;
+  renderPanel(label);
+  var bad=STATUS.filter(function(r){ return r.error; }).length;
+  srcChip.classList.toggle("warn", bad>0 || label.indexOf("built-in")===0);
+  if(!CLIPS.length){
+    srcTxt.textContent="no clips"; spinBtn.disabled=true;
+    panel.classList.add("open");
+    toast("No clips could be loaded. The panel shows what each source reported.",9000);
+    return;
+  }
+  spinBtn.disabled=false;
+  srcTxt.textContent=CLIPS.length+" clips · "+STATUS.filter(function(r){return r.clips.length;}).length+" sources";
+  if(bad) toast(bad+" source(s) failed to load - click the chip at the top right to see why.",8000);
+  idle(); syncFS();
+}
+function loadDoc(doc,label){
+  applyBranding(doc&&doc.meta);
+  resolveAll(sourcesOf(doc),0).then(function(clips){ start(clips,label); });
+}
+function boot(){
+  var inline; try{ inline=JSON.parse($("fallback").textContent); }catch(e){ inline={clips:[]}; }
+  var q=/[?&]clips=([^&]+)/.exec(location.search);
+  var url=q?decodeURIComponent(q[1]):(DATA_URL||"clips.json");
+  if(PAGE_IS_LOCAL && !/^https?:/i.test(url)){
+    loadDoc(inline,"built-in copy");
+    toast("Opened straight from disk, so the browser will not let the page read "+esc(url)+
+          " or list any folder. Running on the built-in copy. Use start.bat, or the “Load list” button, for the live files.",10000);
+    return;
+  }
+  fetch(toUrl(url),{cache:"no-store"})
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(j){ loadDoc(j, q?url:"clips.json"); })
+    .catch(function(e){ loadDoc(inline,"built-in copy"); toast("Could not read "+esc(url)+" ("+e.message+") - running on the built-in copy.",8000); });
+}
+boot();
+})();
+</script>
+</body>
+</html>
