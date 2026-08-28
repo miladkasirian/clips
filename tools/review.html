@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>Review the clips</title>
+<style>
+:root{
+  --bg:#070b14; --pan:#0d1424; --pan2:#131c30;
+  --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.18);
+  --txt:#eef2fb; --dim:#98a5c2; --faint:#63718f;
+  --ok:#31e0c0; --blue:#4d8dff; --gold:#ffc861; --no:#ff5f6d; --violet:#a78bfa;
+  --font:"Segoe UI Variable Display","Segoe UI",Inter,system-ui,-apple-system,sans-serif;
+  --mono:"Cascadia Mono","SF Mono",Consolas,"Roboto Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:var(--font);line-height:1.5;
+  font-size:15px;-webkit-font-smoothing:antialiased;overflow:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(70vw 70vw at 15% -12%, rgba(255,77,157,.11), transparent 62%),
+             radial-gradient(60vw 60vw at 90% 8%, rgba(24,201,168,.10), transparent 62%)}
+
+.app{display:flex;flex-direction:column;height:100%;max-width:640px;margin:0 auto;
+  padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
+
+/* ---------- header ---------- */
+header{flex:none}
+.row{display:flex;align-items:center;gap:10px}
+.mk{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:16px;flex:none;
+  background:linear-gradient(140deg,var(--ok),var(--blue))}
+.ttl{font-size:14.5px;font-weight:750;letter-spacing:-.2px;flex:1;min-width:0}
+.ttl small{display:block;font-size:10.5px;letter-spacing:1.3px;text-transform:uppercase;
+  color:var(--faint);font-weight:750}
+.pos{font-family:var(--mono);font-size:12.5px;color:var(--dim);flex:none}
+.pbar{height:4px;border-radius:99px;background:rgba(255,255,255,.10);margin:9px 0 4px;overflow:hidden}
+.pbar i{display:block;height:100%;width:0;border-radius:99px;
+  background:linear-gradient(90deg,var(--ok),var(--blue));transition:width .3s ease}
+.tally{display:flex;gap:8px;font-size:11px;font-weight:700;letter-spacing:.4px;
+  color:var(--faint);padding:2px 0 8px}
+.tally b{font-weight:800}
+.tally .k b{color:var(--ok)} .tally .d b{color:var(--no)} .tally .s b{color:var(--gold)}
+.tally span{flex:none}
+.tally .sp{flex:1}
+
+/* ---------- clip ---------- */
+main{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;min-height:0}
+.num{font-size:19px;font-weight:800;letter-spacing:-.4px}
+.num em{font-style:normal;color:var(--faint);font-weight:700;font-size:13px;margin-left:8px}
+.stage{position:relative;background:#000;border:1px solid var(--line2);border-radius:16px;
+  overflow:hidden;aspect-ratio:16/9;flex:none}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.veil{position:absolute;inset:0;z-index:2;display:grid;place-items:center;gap:12px;
+  background:rgba(4,7,14,.72);backdrop-filter:blur(3px);cursor:pointer}
+.veil.gone{display:none}
+.veil .big{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.4)}
+.veil svg{width:30px;height:30px;fill:#fff}
+.spin{width:30px;height:30px;border-radius:50%;border:2.5px solid rgba(255,255,255,.16);
+  border-top-color:var(--ok);animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ---------- transport ---------- */
+.tr{display:flex;align-items:center;gap:10px;flex:none;height:34px}
+.tb{flex:none;width:38px;height:34px;border-radius:10px;display:grid;place-items:center;cursor:pointer;
+  border:1px solid var(--line2);background:rgba(255,255,255,.06);color:var(--txt)}
+.tb:active{background:rgba(255,255,255,.16)}
+.tb svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.1;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.tb.fill svg{fill:currentColor;stroke:none}
+.tt{flex:none;font-family:var(--mono);font-size:11px;color:var(--dim);min-width:34px;text-align:center}
+.track{flex:1;height:26px;display:flex;align-items:center;cursor:pointer;touch-action:none}
+.rail{position:relative;width:100%;height:5px;border-radius:99px;background:rgba(255,255,255,.14)}
+.rail i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:99px;
+  background:linear-gradient(90deg,var(--ok),var(--blue))}
+.rail b{position:absolute;top:50%;left:0;width:13px;height:13px;border-radius:50%;background:#fff;
+  transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,.6)}
+
+/* ---------- decision ---------- */
+footer{flex:none;padding-top:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.act{height:58px;border-radius:15px;cursor:pointer;font-family:inherit;font-size:15px;font-weight:750;
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;letter-spacing:.2px;
+  border:1px solid var(--line2);background:rgba(255,255,255,.06);color:var(--txt);transition:.12s}
+.act:active{transform:scale(.975)}
+.act svg{width:19px;height:19px;stroke:currentColor;stroke-width:2.3;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.act.drop{background:linear-gradient(125deg,#ff5f6d,#ff8a5c);color:#2a0308;border-color:transparent;
+  box-shadow:0 12px 26px -14px rgba(255,95,109,.9)}
+.act.keep{background:linear-gradient(125deg,var(--ok),var(--blue));color:#03121a;border-color:transparent;
+  box-shadow:0 12px 26px -14px rgba(49,224,192,.9)}
+.act.small{height:44px;font-size:13.5px;font-weight:700;color:var(--dim)}
+.act[disabled]{opacity:.35;pointer-events:none}
+.hint{text-align:center;font-size:10.5px;color:var(--faint);letter-spacing:.4px;padding-top:8px}
+.hint kbd{font-family:var(--mono);font-size:10px;background:rgba(255,255,255,.09);
+  border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+
+/* ---------- overlays ---------- */
+.sheet{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;
+  background:rgba(4,7,14,.97);backdrop-filter:blur(20px);
+  padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom))}
+.sheet.open{display:flex}
+.sheet .inner{max-width:640px;margin:0 auto;width:100%;display:flex;flex-direction:column;
+  gap:12px;height:100%;min-height:0}
+.sheet h2{font-size:20px;font-weight:800;letter-spacing:-.5px}
+.sheet p{font-size:13.5px;color:var(--dim);max-width:60ch}
+.sheet ol{margin-left:20px;font-size:13.5px;color:var(--dim)}
+.sheet li{margin:5px 0}
+.sheet code{font-family:var(--mono);font-size:12px;background:rgba(255,255,255,.07);
+  border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--gold)}
+textarea{flex:1;min-height:120px;width:100%;resize:none;border-radius:13px;padding:12px;
+  font-family:var(--mono);font-size:11.5px;line-height:1.6;color:#cfe0ff;
+  background:#05080f;border:1px solid var(--line2)}
+.done{text-align:center;padding:26px 10px}
+.done .em{font-size:44px}
+.done h3{font-size:19px;font-weight:800;margin:8px 0 4px}
+.done p{color:var(--dim);font-size:14px;margin:0 auto}
+.msg{font-size:13px;color:var(--gold);text-align:center;padding:14px}
+a.btnlink{text-decoration:none}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div class="row">
+      <div class="mk">&#9986;</div>
+      <div class="ttl">Review the clips<small>drops never touch links.txt</small></div>
+      <div class="pos" id="pos">&mdash;</div>
+    </div>
+    <div class="pbar"><i id="pfill"></i></div>
+    <div class="tally">
+      <span class="k">kept <b id="nKeep">0</b></span>
+      <span class="d">dropped <b id="nDrop">0</b></span>
+      <span class="s">skipped <b id="nSkip">0</b></span>
+      <span class="sp"></span>
+      <span>left <b id="nLeft">0</b></span>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="num" id="num">Loading&hellip;</div>
+    <div class="stage" id="stage">
+      <div class="veil" id="veil"><div class="spin"></div></div>
+    </div>
+    <div class="done" id="donePanel" hidden>
+      <div class="em">&#127881;</div>
+      <h3>Every clip decided</h3>
+      <p id="doneText"></p>
+    </div>
+    <div class="tr" id="tr" hidden>
+      <button class="tb fill" id="pp" type="button" aria-label="Play or pause">
+        <svg id="ppIcon" viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg>
+      </button>
+      <button class="tb" id="rew" type="button" aria-label="Back to the start">
+        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </button>
+      <span class="tt" id="tNow">0:00</span>
+      <div class="track" id="track"><div class="rail"><i id="tFill"></i><b id="tKnob"></b></div></div>
+      <span class="tt" id="tEnd">0:00</span>
+    </div>
+  </main>
+
+  <footer>
+    <div class="grid">
+      <button class="act drop" id="bDrop" type="button">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Drop
+      </button>
+      <button class="act keep" id="bKeep" type="button">
+        <svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg> Keep
+      </button>
+      <button class="act small" id="bSkip" type="button">
+        <svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M20 9A8 8 0 0 0 6.3 5.3L4 8"/></svg> Skip for now
+      </button>
+      <button class="act small" id="bUndo" type="button">
+        <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg> Undo
+      </button>
+    </div>
+    <div class="grid" style="margin-top:9px">
+      <button class="act small" id="bExport" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> Export list
+      </button>
+      <button class="act small" id="bReset" type="button">
+        <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg> Start over
+      </button>
+    </div>
+    <p class="hint">Progress saves by itself &mdash; close this and come back any time.
+      <span id="kb"></span></p>
+  </footer>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="inner">
+    <h2 id="shTitle">Your new list</h2>
+    <p id="shLede"></p>
+    <textarea id="out" readonly spellcheck="false"></textarea>
+    <div class="grid">
+      <button class="act keep" id="bCopy" type="button">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Copy all
+      </button>
+      <a class="act small btnlink" id="bGit" target="_blank" rel="noopener"
+         href="https://github.com/miladkasirian/clips/edit/main/links.txt">
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg> Open on GitHub
+      </a>
+    </div>
+    <ol id="shSteps">
+      <li>Press <b>Copy all</b>.</li>
+      <li>Press <b>Open on GitHub</b> &mdash; it opens <code>links.txt</code> ready to edit.</li>
+      <li>Select everything in the box there and paste over it.</li>
+      <li>Scroll down and press <b>Commit changes</b>.</li>
+    </ol>
+    <div class="grid">
+      <button class="act small" id="bDl" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> Download instead
+      </button>
+      <button class="act small" id="bClose" type="button">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Back to reviewing
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------------------------------------------------------------
+   This page is deliberately read-only towards the list. It fetches
+   ../links.txt, keeps every decision in this browser's own storage, and
+   the only way anything leaves here is you copying the export and pasting
+   it into GitHub yourself. Nothing it does can change the live page.
+
+   Decisions are stored against the VIDEO ID, never the position in the
+   file. Positions shift the moment one line is removed, so index-keyed
+   progress silently re-labels every clip after the first drop.
+   --------------------------------------------------------------------- */
+
+var LIST_URL = "../links.txt";
+var KEY      = "breaktime.review.v1";
+
+var $ = function(id){ return document.getElementById(id); };
+var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$("nSkip"), nLeft=$("nLeft"),
+    num=$("num"), stage=$("stage"), veil=$("veil"), tr=$("tr"), pp=$("pp"), ppIcon=$("ppIcon"), rew=$("rew"),
+    tNow=$("tNow"), tEnd=$("tEnd"), track=$("track"), tFill=$("tFill"), tKnob=$("tKnob"),
+    bDrop=$("bDrop"), bKeep=$("bKeep"), bSkip=$("bSkip"), bUndo=$("bUndo"),
+    donePanel=$("donePanel"), doneText=$("doneText"),
+    bExport=$("bExport"), bReset=$("bReset"), sheet=$("sheet"), out=$("out"),
+    bCopy=$("bCopy"), bDl=$("bDl"), bClose=$("bClose"), shTitle=$("shTitle"), shLede=$("shLede"), kb=$("kb");
+
+var RAW = "";          // links.txt exactly as it was fetched
+var ITEMS = [];        // {id, url, line, n}  - only the live (uncommented) links
+var STATE = {};        // id -> "keep" | "drop" | "skip"
+var HIST  = [];        // ids, newest last, for Undo
+var cur = null, frame = null, msgHook = null;
+
+/* ---------------- storage ---------------- */
+function load(){
+  try{
+    var s = JSON.parse(localStorage.getItem(KEY) || "{}");
+    STATE = s.state || {};
+    HIST  = s.hist  || [];
+  }catch(e){ STATE={}; HIST=[]; }
+}
+function save(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify({state:STATE, hist:HIST, at:Date.now()}));
+  }catch(e){ /* private mode - reviewing still works, it just will not resume */ }
+}
+
+/* ---------------- the list ---------------- */
+var IDRE = /(?:v=|youtu\.be\/|shorts\/|embed\/)([A-Za-z0-9_-]{6,})/;
+
+function parse(text){
+  RAW = text;
+  var lines = text.split(/\r?\n/), out = [], n = 0;
+  for(var i=0;i<lines.length;i++){
+    var t = lines[i].trim();
+    if(!t || t.charAt(0)==="#") continue;      // commented lines are left completely alone
+    var m = IDRE.exec(t);
+    if(!m) continue;
+    n++;
+    out.push({ id:m[1], url:t, line:i, n:n });
+  }
+  return out;
+}
+function pad(n){
+  var w = Math.max(2, String(ITEMS.length||0).length), s = String(n);
+  while(s.length < w) s = "0" + s;
+  return s;
+}
+
+/* ---------------- queue ---------------- */
+function undecided(){
+  var a=[],b=[],i,it;
+  for(i=0;i<ITEMS.length;i++){
+    it=ITEMS[i];
+    if(!STATE[it.id]) a.push(it);              // never seen
+    else if(STATE[it.id]==="skip") b.push(it); // skipped ones come round again at the end
+  }
+  return a.concat(b);
+}
+function counts(){
+  var k=0,d=0,s=0,i,v;
+  for(i=0;i<ITEMS.length;i++){
+    v=STATE[ITEMS[i].id];
+    if(v==="keep") k++; else if(v==="drop") d++; else if(v==="skip") s++;
+  }
+  return {keep:k, drop:d, skip:s, left:undecided().length};
+}
+function paintCounts(){
+  var c = counts(), decided = c.keep + c.drop;
+  nKeep.textContent=c.keep; nDrop.textContent=c.drop; nSkip.textContent=c.skip; nLeft.textContent=c.left;
+  pfill.style.width = ITEMS.length ? (decided/ITEMS.length*100)+"%" : "0%";
+  bUndo.disabled = !HIST.length;
+}
+
+/* ---------------- transport (YouTube gives embeds no controls of their own) ---- */
+var TR = { on:false, dur:0, p:0, playing:false, drag:false, cmd:null };
+function clock(s){ s=Math.max(0,Math.round(s||0)); var m=Math.floor(s/60); s=s%60; return m+":"+(s<10?"0":"")+s; }
+function paintTR(){
+  var pct = TR.dur>0 ? Math.max(0,Math.min(TR.p,TR.dur))/TR.dur*100 : 0;
+  tFill.style.width=pct+"%"; tKnob.style.left=pct+"%";
+  tNow.textContent=clock(TR.p); tEnd.textContent=clock(TR.dur);
+  ppIcon.innerHTML = TR.playing
+    ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
+    : '<path d="M7 4l12 8-12 8z"/>';
+}
+function frac(ev){
+  var r=track.getBoundingClientRect(), x=(ev.touches&&ev.touches[0]?ev.touches[0].clientX:ev.clientX)-r.left;
+  return Math.max(0, Math.min(1, r.width ? x/r.width : 0));
+}
+function seekTo(t){ if(TR.cmd){ TR.cmd("seekTo",[t,true]); TR.cmd("playVideo"); } }
+track.addEventListener("click", function(ev){
+  if(!TR.on||!TR.dur) return; TR.p=frac(ev)*TR.dur; paintTR(); seekTo(TR.p);
+});
+function down(ev){ if(!TR.on||!TR.dur) return; TR.drag=true; TR.p=frac(ev)*TR.dur; paintTR(); ev.preventDefault(); }
+function move(ev){ if(TR.drag){ TR.p=frac(ev)*TR.dur; paintTR(); ev.preventDefault(); } }
+function up(){ if(!TR.drag) return; TR.drag=false; seekTo(TR.p); }
+track.addEventListener("mousedown",down); track.addEventListener("touchstart",down,{passive:false});
+window.addEventListener("mousemove",move); window.addEventListener("touchmove",move,{passive:false});
+window.addEventListener("mouseup",up);     window.addEventListener("touchend",up);
+pp.addEventListener("click", function(){
+  if(!TR.cmd) return;
+  if(TR.playing){ TR.cmd("pauseVideo"); TR.playing=false; }
+  else          { TR.cmd("playVideo");  TR.playing=true;  }
+  paintTR();
+});
+rew.addEventListener("click", function(){ TR.p=0; paintTR(); seekTo(0); });
+
+/* ---------------- mounting a clip ---------------- */
+function clearStage(){
+  if(msgHook){ window.removeEventListener("message",msgHook); msgHook=null; }
+  if(frame){ try{ frame.removeAttribute("src"); }catch(e){} frame.remove(); frame=null; }
+  TR.on=false; TR.cmd=null; TR.dur=0; TR.p=0; TR.playing=false;
+  tr.hidden=true; paintTR();
+}
+function mount(item){
+  clearStage();
+  veil.classList.remove("gone");
+  veil.innerHTML = '<div class="spin"></div>';
+
+  var f = document.createElement("iframe");
+  f.setAttribute("allow","autoplay; encrypted-media; picture-in-picture; fullscreen");
+  f.setAttribute("allowfullscreen","true");
+  // no allow-popups / allow-top-navigation, so YouTube's own links cannot
+  // carry the phone off to youtube.com mid-review
+  f.setAttribute("sandbox","allow-scripts allow-same-origin allow-presentation");
+  var org = /^https?:$/.test(location.protocol) ? "&origin="+encodeURIComponent(location.origin) : "";
+  f.src = "https://www.youtube-nocookie.com/embed/" + item.id +
+          "?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&fs=1&enablejsapi=1" + org;
+  frame = f;
+
+  function cmd(fn,args){
+    try{ f.contentWindow.postMessage(JSON.stringify(
+      {event:"command",func:fn,args:args||[],id:1,channel:"widget"}),"*"); }catch(e){}
+  }
+  TR.cmd = cmd;
+
+  msgHook = function(e){
+    if(!/youtube(-nocookie)?\.com$/.test((e.origin||"").replace(/^https?:\/\//,""))) return;
+    var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(x){ return; } }
+    if(!d) return;
+    if(d.event==="onReady"||d.event==="initialDelivery"){ cmd("playVideo"); }
+    if(d.info && (d.info.currentTime!==undefined || d.info.duration!==undefined)){
+      TR.on = true; tr.hidden = false;
+      if(typeof d.info.duration==="number" && d.info.duration>0) TR.dur=d.info.duration;
+      if(typeof d.info.currentTime==="number" && !TR.drag) TR.p=d.info.currentTime;
+      paintTR();
+    }
+    var st = d.event==="onStateChange" ? d.info : (d.info && d.info.playerState);
+    if(st===undefined||st===null) return;
+    if(st===1||st===3){ veil.classList.add("gone"); }
+    TR.playing = (st===1||st===3);
+    paintTR();
+  };
+  window.addEventListener("message",msgHook);
+
+  f.addEventListener("load", function(){
+    try{ f.contentWindow.postMessage(JSON.stringify({event:"listening",id:1,channel:"widget"}),"*"); }catch(e){}
+    cmd("addEventListener",["onStateChange"]);
+    cmd("playVideo");
+  });
+  stage.insertBefore(f, veil);
+
+  // A phone will not autoplay with sound, and this player has no play button of
+  // its own, so after a moment the veil turns into one. Tapping it is a real
+  // gesture on this page, which is what the API needs.
+  setTimeout(function(){
+    if(veil.classList.contains("gone")) return;
+    veil.innerHTML = '<div class="big"><svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg></div>';
+  }, 2200);
+}
+veil.addEventListener("click", function(){
+  if(TR.cmd){ TR.cmd("playVideo"); veil.classList.add("gone"); }
+});
+
+/* ---------------- moving through the queue ---------------- */
+function show(){
+  var q = undecided();
+  if(!q.length){ finished(); return; }
+  unfinish();
+  cur = q[0];
+  var c = counts();
+  num.innerHTML = "Clip " + pad(cur.n) + "<em>" + (c.keep+c.drop+1) + " of " + ITEMS.length + " decided</em>";
+  num.setAttribute("data-clip", pad(cur.n));
+  pos.textContent = (ITEMS.length - c.left) + "/" + ITEMS.length;
+  paintCounts();
+  mount(cur);
+}
+function decide(v){
+  if(!cur) return;
+  STATE[cur.id] = v;
+  HIST.push(cur.id);
+  if(HIST.length > 400) HIST.shift();
+  save(); show();
+}
+function undo(){
+  var id = HIST.pop();
+  if(!id) return;
+  delete STATE[id];
+  save();
+  // put the undone clip straight back in front, rather than wherever the queue
+  // would otherwise have placed it
+  var i, it=null;
+  for(i=0;i<ITEMS.length;i++) if(ITEMS[i].id===id){ it=ITEMS[i]; break; }
+  paintCounts();
+  if(it){ unfinish(); cur=it; num.innerHTML="Clip "+pad(it.n)+"<em>back for another look</em>";
+          num.setAttribute("data-clip", pad(it.n)); mount(it); }
+  else show();
+}
+function finished(){
+  clearStage();
+  cur = null;
+  var c = counts();
+  num.textContent = "";
+  // hide the stage rather than removing it - Undo has to be able to bring a
+  // clip straight back, and a torn-out stage would take its veil with it
+  stage.hidden = true; tr.hidden = true; donePanel.hidden = false;
+  doneText.innerHTML = "You kept <b>" + c.keep + "</b> and dropped <b>" + c.drop + "</b>.<br>" +
+    "Press <b>Export list</b> to get the new links.txt.";
+  bDrop.disabled = bKeep.disabled = bSkip.disabled = true;
+  paintCounts();
+}
+function unfinish(){
+  stage.hidden = false; donePanel.hidden = true;
+  bDrop.disabled = bKeep.disabled = bSkip.disabled = false;
+}
+
+bDrop.addEventListener("click", function(){ decide("drop"); });
+bKeep.addEventListener("click", function(){ decide("keep"); });
+bSkip.addEventListener("click", function(){ decide("skip"); });
+bUndo.addEventListener("click", undo);
+
+document.addEventListener("keydown", function(e){
+  if(sheet.classList.contains("open")){
+    if(e.key==="Escape") sheet.classList.remove("open");
+    return;
+  }
+  var k = e.key.toLowerCase();
+  if(k==="d"){ e.preventDefault(); decide("drop"); }
+  if(k==="k"){ e.preventDefault(); decide("keep"); }
+  if(k==="s"){ e.preventDefault(); decide("skip"); }
+  if(k==="u"){ e.preventDefault(); undo(); }
+  if(k==="r"){ e.preventDefault(); TR.p=0; paintTR(); seekTo(0); }
+  if(e.key===" "){ e.preventDefault(); pp.click(); }
+});
+
+/* ---------------- export ---------------- */
+function buildFile(){
+  var dropped = [], lines = RAW.split(/\r?\n/), keep = [], i, t, m, id;
+  for(i=0;i<lines.length;i++){
+    t = lines[i];
+    var trimmed = t.trim();
+    if(!trimmed || trimmed.charAt(0)==="#"){ keep.push(t); continue; }  // comments pass through untouched
+    m = IDRE.exec(trimmed);
+    id = m ? m[1] : null;
+    if(id && STATE[id]==="drop"){ dropped.push(trimmed); continue; }
+    keep.push(t);
+  }
+  var text = keep.join("\n").replace(/\n{3,}$/,"\n");
+  if(dropped.length){
+    // nothing is destroyed: dropped links go to the bottom, commented out, so a
+    // change of mind costs one character rather than finding the link again
+    text = text.replace(/\s*$/,"") +
+      "\n\n\n# ---- dropped during review on " + new Date().toISOString().slice(0,10) +
+      " (" + dropped.length + ") - delete the # to bring one back ----\n";
+    for(i=0;i<dropped.length;i++) text += "# " + dropped[i] + "\n";
+  }
+  return {text:text.replace(/\s*$/,"") + "\n", dropped:dropped.length};
+}
+function openSheet(){
+  var r = buildFile(), c = counts(), live = 0, i;
+  var ls = r.text.split(/\r?\n/);
+  for(i=0;i<ls.length;i++){ var t=ls[i].trim(); if(t && t.charAt(0)!=="#") live++; }
+  out.value = r.text;
+  shTitle.textContent = "Your new list — " + live + " clips";
+  shLede.textContent = c.left
+    ? ("You still have " + c.left + " to look at. Exporting now is fine — this is everything except the "
+       + r.dropped + " you dropped, and your progress is kept.")
+    : ("Everything except the " + r.dropped + " you dropped. The dropped links are commented out at the bottom, not deleted.");
+  sheet.classList.add("open");
+}
+bExport.addEventListener("click", openSheet);
+bClose.addEventListener("click", function(){ sheet.classList.remove("open"); });
+bCopy.addEventListener("click", function(){
+  out.focus(); out.select(); out.setSelectionRange(0, out.value.length);
+  var done = function(){ bCopy.innerHTML = "Copied &#10003;"; setTimeout(function(){
+      bCopy.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Copy all'; }, 1600); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(out.value).then(done, function(){ try{ document.execCommand("copy"); done(); }catch(e){} });
+  }else{
+    try{ document.execCommand("copy"); done(); }catch(e){}
+  }
+});
+bDl.addEventListener("click", function(){
+  var b = new Blob([out.value], {type:"text/plain"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(b); a.download = "links.txt";
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+});
+bReset.addEventListener("click", function(){
+  if(!confirm("Forget every decision and start from clip 1?\n\nThis only clears this page's own progress. links.txt is untouched.")) return;
+  STATE={}; HIST=[]; save(); location.reload();
+});
+
+/* ---------------- go ---------------- */
+if(!("ontouchstart" in window)) kb.innerHTML = '&nbsp;&middot;&nbsp; <kbd>D</kbd> drop &nbsp;<kbd>K</kbd> keep &nbsp;<kbd>S</kbd> skip &nbsp;<kbd>U</kbd> undo';
+
+load();
+fetch(LIST_URL, {cache:"no-store"})
+  .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.text(); })
+  .then(function(t){
+    ITEMS = parse(t);
+    if(!ITEMS.length){ num.textContent = "links.txt has no live links in it."; return; }
+    // decisions are keyed by video id, so any that no longer exist in the file
+    // are quietly forgotten rather than shifting everything else along
+    var seen = {}, i;
+    for(i=0;i<ITEMS.length;i++) seen[ITEMS[i].id]=1;
+    for(var k in STATE) if(!seen[k]) delete STATE[k];
+    HIST = HIST.filter(function(id){ return seen[id]; });
+    show();
+  })
+  .catch(function(e){
+    num.textContent = "Could not read links.txt";
+    stage.innerHTML = '<div class="msg">' + String(e.message) +
+      '<br><br>This page expects to sit in a <code>tools/</code> folder with links.txt one level above it.</div>';
+  });
+})();
+</script>
+</body>
+</html>
