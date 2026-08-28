@@ -116,6 +116,14 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
   stroke-linecap:round;stroke-linejoin:round}
 .notewrap .mic.rec{background:var(--no);color:#2a0308;border-color:transparent;animation:mic 1.2s ease-in-out infinite}
 .notewrap .mic.busy{opacity:.55;pointer-events:none}
+.notewrap .lang{position:absolute;right:46px;top:8px;height:32px;padding:0 9px;border-radius:10px;cursor:pointer;
+  font-family:var(--mono);font-size:11px;font-weight:800;letter-spacing:.5px;
+  border:1px solid var(--line2);background:rgba(255,255,255,.06);color:var(--dim)}
+.notewrap .pol{position:absolute;right:8px;bottom:46px;width:32px;height:32px;border-radius:10px;
+  display:grid;place-items:center;cursor:pointer;
+  border:1px solid rgba(77,141,255,.45);background:rgba(77,141,255,.15);color:var(--blue)}
+.notewrap .pol svg{width:16px;height:16px;fill:currentColor;stroke:none}
+.notewrap textarea{padding:11px 88px 11px 13px}
 @keyframes mic{0%,100%{box-shadow:0 0 0 0 rgba(255,95,109,.55)}70%{box-shadow:0 0 0 9px rgba(255,95,109,0)}}
 .notewrap .spk{position:absolute;right:46px;bottom:8px;width:32px;height:32px;border-radius:10px;
   display:grid;place-items:center;cursor:pointer;
@@ -213,6 +221,10 @@ a.btnlink{text-decoration:none}
 .rhead .mvi svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;
   stroke-linecap:round;stroke-linejoin:round}
 .rhead .mvi{color:var(--gold);border-color:rgba(255,200,97,.35);background:rgba(255,200,97,.10)}
+.rhead .edt{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;cursor:pointer;
+  border:1px solid rgba(167,139,250,.4);background:rgba(167,139,250,.13);color:var(--violet)}
+.rhead .edt svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.1;
+  stroke-linecap:round;stroke-linejoin:round}
 .row2.open .rbody .mv{margin-top:9px}
 .rbody{display:none;padding:0 12px 12px}
 .row2.open .rbody{display:block}
@@ -318,16 +330,13 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
         <button class="mic" id="noteMic" type="button" title="Say it out loud instead of typing" aria-label="Record a voice note">
           <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
         </button>
+        <button class="lang" id="micLang" type="button" title="The language you will speak">EN</button>
+        <button class="pol" id="notePolish" type="button" title="Tidy it into short, natural English" aria-label="Tidy the note">
+          <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5z"/><path d="M18 15l.9 2.2L21 18l-2.1.8L18 21l-.9-2.2L15 18l2.1-.8z"/></svg>
+        </button>
       </div>
     </div>
     <p class="aistat" id="aiStat"></p>
-    <div class="keypanel" id="keyPanel">
-      <input id="keyIn" type="password" placeholder="sk-... your OpenAI key, kept on this phone only"
-             name="ai-key" autocomplete="new-password" spellcheck="false"
-             data-lpignore="true" data-1p-ignore data-form-type="other">
-      <button id="keySave" type="button">Save</button>
-      <button id="keyForget" type="button">Forget</button>
-    </div>
     <div class="grid" style="margin-top:9px">
       <button class="act small" id="bLists" type="button">
         <svg viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg> Kept &amp; dropped
@@ -487,7 +496,8 @@ var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$(
     live=$("live"), liveTxt=$("liveTxt"), flash=$("flash"),
     bExportTxt=$("bExportTxt"), bPubKeepTxt=$("bPubKeepTxt"), mKept=$("mKept"), mAll=$("mAll"),
     noteIn=$("noteIn"), noteSave=$("noteSave"), noteMic=$("noteMic"), noteSpeak=$("noteSpeak"),
-    aiStat=$("aiStat"), keyPanel=$("keyPanel"), keyIn=$("keyIn"), keySave=$("keySave"), keyForget=$("keyForget"),
+    micLang=$("micLang"), notePolish=$("notePolish"),
+    aiStat=$("aiStat"),
     bLists=$("bLists"), bAdd=$("bAdd"), lists=$("lists"), rows=$("rows"), bListsClose=$("bListsClose"),
     tKept=$("tKept"), tDropped=$("tDropped"), tSkipped=$("tSkipped"), bPubKeep=$("bPubKeep"),
     addSheet=$("addSheet"), addIn=$("addIn"), bCheck=$("bCheck"), bAddClose=$("bAddClose"), results=$("results"),
@@ -902,7 +912,6 @@ document.addEventListener("keydown", function(e){
     if(e.key==="Escape") sheet.classList.remove("open");
     return;
   }
-  if(keyPanel.classList.contains("open") && e.key==="Escape"){ keyPanel.classList.remove("open"); return; }
   if(lists.classList.contains("open")){ if(e.key==="Escape") sheetShut(lists); return; }
   if(addSheet.classList.contains("open")){ if(e.key==="Escape") sheetShut(addSheet); return; }
   if(/^(INPUT|TEXTAREA)$/.test(e.target.tagName||"")) return;
@@ -916,85 +925,184 @@ document.addEventListener("keydown", function(e){
 });
 
 /* =====================================================================
-   VOICE NOTES
+   DICTATION, FREE
    ---------------------------------------------------------------------
-   Speak in English or Persian; it comes back as short, natural American
-   English, and can be turned into an American voice that the main page
-   plays when the clip ends.
+   The browser can already turn speech into text - no key, no account, no
+   bill. It only writes down what was said; it does not translate, tidy or
+   shorten. That part is a separate press, and it happens wherever you
+   like: paste the text into Claude or ChatGPT and paste the answer back.
 
-   Three calls, all straight from this browser:
-     speech  -> /v1/audio/transcriptions   (language is auto-detected)
-     text    -> /v1/chat/completions       (translate, tidy, cut to ~20s)
-     text    -> /v1/audio/speech           (an American male voice)
-
-   THE KEY. There is no server here, so the key has to live in this
-   browser. It goes in localStorage and NOTHING writes it to the
-   repository - that repository is public, and a key found there is money
-   anyone can spend. Anyone who can unlock this phone can spend it too,
-   which is the price of having no server. "Forget" erases it, and a key
-   can always be revoked at platform.openai.com.
+   If an OpenAI key IS stored, the paid path above is used instead and the
+   whole thing happens in one step. Nothing needs changing to switch - the
+   presence of a key is the switch.
    ===================================================================== */
-var AIKEY = "breaktime.review.openaikey";
-var AICFG = window.AI || {};
-function aikey(){ try{ return localStorage.getItem(AIKEY) || ""; }catch(e){ return ""; } }
-function aisay(msg, cls){
-  aiStat.textContent = msg || "";
-  aiStat.className = "aistat" + (cls ? " " + cls : "");
-}
-function needKey(){
-  if(aikey()) return true;
-  keyPanel.classList.add("open");
-  aisay("Paste your OpenAI key once and this phone will remember it.", "bad");
-  keyIn.focus();
-  return false;
-}
-keySave.addEventListener("click", function(){
-  var k = (keyIn.value || "").trim();
-  if(!k){ aisay("Nothing pasted.", "bad"); return; }
-  try{ localStorage.setItem(AIKEY, k); }catch(e){}
-  keyIn.value = ""; keyPanel.classList.remove("open");
-  aisay("Key saved on this phone.", "good");
-});
-keyForget.addEventListener("click", function(){
-  try{ localStorage.removeItem(AIKEY); }catch(e){}
-  keyIn.value = ""; aisay("Key erased from this phone.", "good");
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+var LANGKEY = "breaktime.review.lang";
+function dictLang(){ try{ return localStorage.getItem(LANGKEY) || "en-US"; }catch(e){ return "en-US"; } }
+function setDictLang(v){ try{ localStorage.setItem(LANGKEY, v); }catch(e){} paintLang(); }
+function paintLang(){ micLang.textContent = dictLang() === "fa-IR" ? "FA" : "EN"; }
+micLang.addEventListener("click", function(e){
+  e.stopPropagation();
+  setDictLang(dictLang() === "fa-IR" ? "en-US" : "fa-IR");
+  aisay("Dictation set to " + (dictLang()==="fa-IR" ? "Persian" : "English") + ".", "good");
 });
 
-function ai(path, opts){
-  opts = opts || {};
-  opts.headers = Object.assign({"Authorization":"Bearer " + aikey()}, opts.headers || {});
-  return fetch("https://api.openai.com/v1/" + path, opts).then(function(r){
-    if(r.ok) return r;
-    return r.text().then(function(t){
-      var msg = t;
-      try{ msg = (JSON.parse(t).error || {}).message || t; }catch(e){}
-      if(r.status === 401) msg = "OpenAI refused the key. Check it, or paste a new one.";
-      if(r.status === 429) msg = "OpenAI is rate limiting, or the account is out of credit.";
-      if(/model/i.test(msg) && r.status === 404)
-        msg += "  (change the model name in tools/sync-config.js)";
-      throw new Error(msg.slice(0, 180));
-    });
-  });
-}
-
-/* ---- 1. record ---- */
-var rec = null, chunks = [];
-function pickMime(){
-  var want = ["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg"];
-  for(var i=0;i<want.length;i++){
-    if(window.MediaRecorder && MediaRecorder.isTypeSupported(want[i])) return want[i];
+var listener = null;
+function freeDictate(){
+  if(listener){ try{ listener.stop(); }catch(e){} return; }
+  if(!SR){
+    aisay("This browser cannot listen. Type the note, or use Chrome.", "bad"); return;
   }
-  return "";
+  var r = new SR();
+  r.lang = dictLang();
+  r.continuous = true;
+  r.interimResults = true;
+  var settled = noteIn.value ? noteIn.value.trim() + " " : "";
+  r.onstart = function(){
+    noteMic.classList.add("rec");
+    aisay("Listening in " + (dictLang()==="fa-IR" ? "Persian" : "English") +
+          " \u2014 press the microphone again to stop.");
+  };
+  r.onresult = function(ev){
+    var live = "";
+    for(var i=ev.resultIndex; i<ev.results.length; i++){
+      var t = ev.results[i][0].transcript;
+      if(ev.results[i].isFinal) settled += t + " "; else live += t;
+    }
+    noteIn.value = (settled + live).replace(/\s+/g," ").trim();
+  };
+  r.onerror = function(ev){
+    aisay(ev.error === "not-allowed"
+      ? "The microphone was blocked. Allow it in the browser and try again."
+      : "Dictation stopped (" + ev.error + ").", "bad");
+  };
+  r.onend = function(){
+    listener = null;
+    noteMic.classList.remove("rec");
+    if(noteIn.value.trim()){
+      saveNote();
+      aisay("Written down. Press \u2728 to have it tidied into short English.", "good");
+    }
+  };
+  listener = r;
+  try{ r.start(); }
+  catch(e){ listener=null; aisay("Could not start listening. Try again.", "bad"); }
 }
-function stopRec(){
-  if(rec && rec.state !== "inactive"){ try{ rec.stop(); }catch(e){} }
+
+/* ---- the polish handoff: no key, no bill ---- */
+function polishPrompt(text){
+  var secs = AICFG.seconds || 20;
+  return "Rewrite this into the one-line note a lecturer plays after a short comedy clip " +
+    "during a class break.\n\n" +
+    "- Natural, idiomatic American English - the way a person talks, not written prose.\n" +
+    "- Fix all grammar. Keep the meaning and the humour.\n" +
+    "- About " + Math.round(secs*2.6) + " words, so it takes roughly " + secs + " seconds to say out loud. " +
+      "If the original rambles, keep only the point worth hearing.\n" +
+    "- One or two emoji, only where they land.\n" +
+    "- It is read aloud to university students, so keep it clean.\n" +
+    "- Reply with the note itself and nothing else.\n\n" +
+    "Here it is:\n" + text;
 }
+notePolish.addEventListener("click", function(){
+  var text = noteIn.value.trim();
+  if(!text){ aisay("Dictate or type something first.", "bad"); return; }
+  var payload = polishPrompt(text);
+  var done = function(){
+    aisay("Copied with the instructions. Paste it to Claude or ChatGPT, then paste the answer back.", "good");
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(payload).then(done, function(){ fallbackCopy(payload, done); });
+  } else fallbackCopy(payload, done);
+});
+function fallbackCopy(text, done){
+  var ta = document.createElement("textarea");
+  ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); done(); }catch(e){ aisay("Could not copy. Select the text by hand.", "bad"); }
+  ta.remove();
+}
+
+/* =====================================================================
+   SENDING A RECORDING TO BE WRITTEN UP
+   ---------------------------------------------------------------------
+   Nobody here has an OpenAI key, and nobody needs one. The recording is
+   committed to voice-in/ in the repository, and that commit sets off a
+   GitHub Action which holds the key, does the transcribing and the
+   rewriting, and puts the finished note in the shared database. This page
+   simply waits for it to appear - on every phone at once, not just this one.
+
+   Name it "<id>.webm" for text only, or "<id>.voice.webm" to also have the
+   spoken version made.
+   ===================================================================== */
+var wantVoice = false;
+noteSpeak.addEventListener("click", function(){
+  wantVoice = !wantVoice;
+  noteSpeak.classList.toggle("has", wantVoice);
+  aisay(wantVoice
+    ? "The next recording will also be given a spoken version."
+    : "The next recording will be written up as text only.", "good");
+});
+
+function sendRecording(blob, type){
+  if(!cur) return;
+  var id = cur.id;
+  var ext = type.indexOf("mp4") > -1 ? "mp4" : type.indexOf("ogg") > -1 ? "ogg" : "webm";
+  var name = id + (wantVoice ? ".voice." : ".") + ext;
+  noteMic.classList.add("busy");
+  aisay("Sending the recording to be written up\u2026");
+
+  var reader = new FileReader();
+  reader.onload = function(){
+    var b64 = String(reader.result).split(",")[1] || "";
+    gh("contents/voice-in/" + name + "?ref=" + BRANCH).then(function(r){
+      return r.ok ? r.json().then(function(j){ return j.sha; }) : null;
+    }, function(){ return null; }).then(function(sha){
+      var body = {message:"Dictated note for " + id, content:b64, branch:BRANCH};
+      if(sha) body.sha = sha;
+      return gh("contents/voice-in/" + name, {method:"PUT", body:JSON.stringify(body)});
+    }).then(function(r){
+      if(!r.ok) return r.text().then(function(t){
+        throw new Error("could not send it (HTTP " + r.status + ") " + t.slice(0,90)); });
+      aisay("Sent. GitHub is writing it up \u2014 this usually takes under a minute\u2026");
+      awaitNote(id);
+    }).catch(function(e){
+      aisay(String(e.message || e), "bad");
+      noteMic.classList.remove("busy");
+    });
+  };
+  reader.onerror = function(){ aisay("Could not read the recording.", "bad"); noteMic.classList.remove("busy"); };
+  reader.readAsDataURL(blob);
+}
+
+/* wait for the Action to put the note in the database */
+var waiting = null;
+function awaitNote(id){
+  clearInterval(waiting);
+  var before = NOTES[id] || "", tries = 0;
+  waiting = setInterval(function(){
+    tries++;
+    if(tries > 40){                       // about three minutes
+      clearInterval(waiting); noteMic.classList.remove("busy");
+      aisay("It is taking longer than usual. Check the Actions tab on GitHub.", "bad");
+      return;
+    }
+    pullAdded(function(){
+      if((NOTES[id] || "") !== before && NOTES[id]){
+        clearInterval(waiting); noteMic.classList.remove("busy");
+        if(cur && cur.id === id) paintNote();
+        aisay("Written up. Edit it if you like.", "good");
+      }
+    });
+  }, 5000);
+}
+
 noteMic.addEventListener("click", function(){
   if(rec && rec.state === "recording"){ stopRec(); return; }
-  if(!navigator.mediaDevices || !window.MediaRecorder){
-    aisay("This browser cannot record audio. Type the note instead.", "bad"); return;
-  }
-  if(!needKey()) return;
+  // With a GitHub token the recording can be sent off and written up properly.
+  // Without one there is nowhere to send it, so the browser writes down what it
+  // hears instead - free, instant, and in whatever language you spoke.
+  if(!token()){ freeDictate(); return; }
+  if(!navigator.mediaDevices || !window.MediaRecorder){ freeDictate(); return; }
   aisay("Asking for the microphone\u2026");
   navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
     var mime = pickMime();
@@ -1007,7 +1115,7 @@ noteMic.addEventListener("click", function(){
       var type = (rec.mimeType || mime || "audio/webm").split(";")[0];
       var blob = new Blob(chunks, {type:type});
       if(blob.size < 1200){ aisay("That was too short to hear. Try again.", "bad"); return; }
-      transcribe(blob, type);
+      sendRecording(blob, type);
     };
     rec.start();
     noteMic.classList.add("rec");
@@ -1016,122 +1124,6 @@ noteMic.addEventListener("click", function(){
     aisay("The microphone was blocked. Allow it in the browser and try again.", "bad");
   });
 });
-
-/* ---- 2. speech to text, then tidy it ---- */
-function transcribe(blob, type){
-  var ext = type.indexOf("mp4") > -1 ? "mp4" : type.indexOf("ogg") > -1 ? "ogg" : "webm";
-  var fd = new FormData();
-  // the filename matters: the API identifies the format from the extension
-  fd.append("file", blob, "note." + ext);
-  fd.append("model", AICFG.transcribe || "gpt-4o-transcribe");
-  noteMic.classList.add("busy");
-  aisay("Writing down what you said\u2026");
-  ai("audio/transcriptions", {method:"POST", body:fd})
-    .then(function(r){ return r.json(); })
-    .then(function(j){
-      var said = (j.text || "").trim();
-      if(!said) throw new Error("nothing was heard in that recording");
-      aisay("Turning it into a short English note\u2026");
-      return polish(said);
-    })
-    .then(function(text){
-      noteIn.value = text;
-      saveNote();
-      aisay("Done. Edit it if you like, then press the speaker to make the voice.", "good");
-    })
-    .catch(function(e){ aisay(String(e.message || e), "bad"); })
-    .then(function(){ noteMic.classList.remove("busy"); });
-}
-
-function polish(said){
-  var secs = AICFG.seconds || 20;
-  var words = Math.round(secs * 2.6);   // ordinary speaking pace
-  var body = {
-    model: AICFG.writer || "gpt-4o-mini",
-    temperature: 0.7,
-    messages: [
-      { role:"system", content:
-        "You write the one-line note a lecturer plays after a short comedy clip during a class break. " +
-        "The input is dictated, may be English or Persian, and may ramble.\n" +
-        "Rewrite it as natural, idiomatic American English - the way a person actually talks, not written prose. " +
-        "Fix all grammar. Keep the speaker's meaning and their sense of humour.\n" +
-        "HARD LIMIT: about " + words + " words, so it takes roughly " + secs + " seconds to say. " +
-        "If the dictation was long, keep only the point worth hearing.\n" +
-        "Add one or two emoji where they genuinely land. Do not decorate every sentence.\n" +
-        "It will be read out loud to a room of university students, so keep it clean.\n" +
-        "Reply with the note itself and nothing else - no quotes, no preamble, no explanation." },
-      { role:"user", content: said }
-    ]
-  };
-  return ai("chat/completions", {
-    method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)
-  }).then(function(r){ return r.json(); })
-    .then(function(j){
-      var t = (((j.choices||[])[0]||{}).message||{}).content || "";
-      t = t.trim().replace(/^["\u201c]|["\u201d]$/g,"").replace(/\s+/g," ").replace(/\|/g,"/");
-      if(!t) throw new Error("the writer returned nothing");
-      return t;
-    });
-}
-
-/* ---- 3. text to an American voice, committed beside the clip ---- */
-function speakerPath(id){ return "audio/" + id + ".mp3"; }
-noteSpeak.addEventListener("click", function(){
-  if(!cur) return;
-  var text = noteIn.value.trim();
-  if(!text){ aisay("Write or dictate a note first.", "bad"); return; }
-  if(!needKey()) return;
-  if(!token()){
-    aisay("The spoken file is stored in the repository, so this also needs the GitHub token " +
-          "from Export / publish.", "bad");
-    return;
-  }
-  var id = cur.id;
-  noteSpeak.classList.add("busy");
-  aisay("Recording the voice\u2026");
-  ai("audio/speech", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({
-      model: AICFG.speaker || "gpt-4o-mini-tts",
-      voice: AICFG.voice || "onyx",
-      input: text,
-      response_format: "mp3",
-      instructions: "American man, warm and conversational, with comic timing. " +
-        "Speak it the way a friend would say it, not the way a newsreader would. " +
-        "Let the funny parts land - a smile in the voice, a slight laugh where it fits. " +
-        "Never sound like an announcer."
-    })
-  }).then(function(r){ return r.arrayBuffer(); })
-    .then(function(buf){
-      aisay("Saving it next to the clip\u2026");
-      var bytes = new Uint8Array(buf), bin = "";
-      for(var i=0;i<bytes.length;i+=8192)
-        bin += String.fromCharCode.apply(null, bytes.subarray(i, i+8192));
-      return putAudio(id, btoa(bin));
-    })
-    .then(function(){
-      VOICES[id] = 1; saveLocal(); pushSide("voices", id, true);
-      noteSpeak.classList.add("has");
-      aisay("The spoken version is ready. It plays on the main page when the clip ends.", "good");
-    })
-    .catch(function(e){ aisay(String(e.message || e), "bad"); })
-    .then(function(){ noteSpeak.classList.remove("busy"); });
-});
-
-function putAudio(id, b64){
-  var path = "contents/" + speakerPath(id);
-  // an existing file needs its sha, a new one must not carry one
-  return gh(path + "?ref=" + BRANCH).then(function(r){
-    return r.ok ? r.json().then(function(j){ return j.sha; }) : null;
-  }, function(){ return null; }).then(function(sha){
-    var body = {message:"Spoken note for " + id, content:b64, branch:BRANCH};
-    if(sha) body.sha = sha;
-    return gh(path, {method:"PUT", body:JSON.stringify(body)}).then(function(r){
-      if(!r.ok) return r.text().then(function(t){
-        throw new Error("could not save the audio (HTTP " + r.status + ") " + t.slice(0,90)); });
-    });
-  });
-}
 
 /* =====================================================================
    THE TWO LISTS
@@ -1169,6 +1161,8 @@ function paintRows(){
     row.innerHTML =
       '<div class="rhead"><b>Clip ' + pad(it.n) + '</b>' +
       '<span>' + (it.added ? "added by hand" : it.id) + '</span>' +
+      '<span class="edt" title="Open this clip in the note editor"><svg viewBox="0 0 24 24">' +
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>' +
       '<span class="mvi" title="Move to the other list"><svg viewBox="0 0 24 24">' +
       '<path d="M7 7h13l-3-3"/><path d="M17 17H4l3 3"/></svg></span>' +
       '<span class="go"><svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg></span></div>' +
@@ -1216,6 +1210,18 @@ function paintRows(){
     }
     // reachable from the row itself as well as from inside it, so a clip can be
     // moved without having to start it playing first
+    // Rather than a second set of microphone and voice buttons in every row,
+    // the row hands the clip to the one editor that already has them.
+    row.querySelector(".edt").addEventListener("click", function(e){
+      e.stopPropagation();
+      sheetShut(lists);
+      unfinish();
+      cur = it; curVerdict = STATE[it.id] || null;
+      num.innerHTML = "Clip " + pad(it.n) + "<em>" + WORD[STATE[it.id]] + " \u2014 editing the note</em>";
+      num.setAttribute("data-clip", pad(it.n));
+      paintNote(); mount(it);
+      setTimeout(function(){ noteIn.focus(); }, 400);
+    });
     row.querySelector(".mvi").addEventListener("click", move);
     row.querySelector(".mv").addEventListener("click", move);
     rows.appendChild(row);
@@ -1281,11 +1287,12 @@ function paintNote(){
   noteIn.value = cur ? (NOTES[cur.id] || "") : "";
   noteIn.disabled = !cur;
   noteSave.classList.remove("saved");
-  noteSpeak.classList.toggle("has", !!(cur && VOICES[cur.id]));
-  noteSpeak.title = (cur && VOICES[cur.id])
-    ? "A spoken version exists - press to record it again"
-    : "Make the spoken version";
-  aisay("");
+  // the speaker is a switch for the NEXT recording, not a report on this clip
+  noteSpeak.classList.toggle("has", wantVoice);
+  noteSpeak.title = wantVoice
+    ? "The next recording will also get a spoken version - press to turn that off"
+    : "Also make a spoken version of the next recording";
+  aisay(cur && VOICES[cur.id] ? "This clip already has a spoken version." : "");
 }
 function saveNote(){
   if(!cur) return;
@@ -1639,7 +1646,7 @@ fetch(LIST_URL, {cache:"no-store"})
     for(var k in STATE) if(!seen[k] && !ADDED[k]) delete STATE[k];
     HIST = HIST.filter(function(id){ return seen[id]; });
     show();                 // the cached view paints immediately
-    paintPub();
+    paintPub(); paintLang();
     startStream();          // and the shared one lands on top of it
     // hand-added links live beside the decisions; fetch them, then keep an eye
     // on them in case the other phone adds one

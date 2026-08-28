@@ -3,7 +3,7 @@
 # Put a # in front of a line to park it without deleting it.
 # 9 live links. 48 more are commented out below.
 
-https://www.youtube.com/watch?v=Lun4z5hMSAY
+https://www.youtube.com/watch?v=Lun4z5hMSAY | Demo note — this is what a note looks like when a clip ends. Delete it whenever you like. 🍿
 https://www.youtube.com/watch?v=fKTaYOTCDsA
 https://www.youtube.com/watch?v=VfQeYkmymfQ
 https://www.youtube.com/watch?v=nfVEvgWd4ek

@@ -1,0 +1,52 @@
+# ---------------------------------------------------------------------------
+# Turns a dictated clip note into short, natural English - and, if asked, into
+# an American voice - without the OpenAI key ever leaving GitHub.
+#
+# WHY IT WORKS THIS WAY
+# A page served by GitHub Pages cannot read a repository secret; secrets exist
+# only inside a workflow run. So the page does the one thing it can do with the
+# credentials it already has: it commits the recording. That commit is the
+# trigger. Everything expensive and secret happens here, on GitHub's machines.
+#
+# Nobody using the review page ever needs the OpenAI key.
+#
+# Actions minutes are free, with no cap, on public repositories.
+# ---------------------------------------------------------------------------
+name: Voice note
+
+on:
+  push:
+    paths:
+      - 'voice-in/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: voice-note
+  cancel-in-progress: false
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Process every pending recording
+        env:
+          OPENAI_API_KEY: ${{ secrets.CLIPS }}
+        run: python3 .github/scripts/voice_note.py
+
+      - name: Commit whatever changed
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "nothing to commit"; exit 0
+          fi
+          git config user.name  "break-time-bot"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "Voice note processed"
+          # this push is made with GITHUB_TOKEN, so it cannot retrigger this
+          # workflow - which is exactly what stops it looping on itself
+          git push

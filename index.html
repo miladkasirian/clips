@@ -1462,6 +1462,7 @@ function openPlayer(clip){
 function closePlayer(){
   rerolls=0;
   if(voice){ try{ voice.pause(); }catch(e){} }
+  try{ window.speechSynthesis && speechSynthesis.cancel(); }catch(e){}
   if(document.fullscreenElement){ try{document.exitFullscreen();}catch(e){} }
   player.classList.remove("open");
   clearMedia();
@@ -1555,6 +1556,24 @@ closeBtn.addEventListener("click",closePlayer);
    audio/<video id>.mp3. Nothing records whether it exists - the file is simply
    asked for, and if it is not there the note is shown silently. That keeps the
    link file to one line per clip with nothing extra to keep in step. */
+/* When no spoken file was made, the note is read by the browser's own voice.
+   It is free and needs nothing stored, but it is a plain machine voice - no
+   comic timing. A recorded file, when one exists, always wins. */
+function sayAloud(text){
+  text = (text || "").trim();
+  if(!text || !window.speechSynthesis) return;
+  try{
+    speechSynthesis.cancel();
+    var u=new SpeechSynthesisUtterance(text);
+    u.lang="en-US"; u.rate=1.0;
+    var vs=speechSynthesis.getVoices()||[];
+    var pick=vs.filter(function(v){ return /en[-_]US/i.test(v.lang) &&
+               /david|mark|guy|male|google us/i.test(v.name); })[0]
+          || vs.filter(function(v){ return /en[-_]US/i.test(v.lang); })[0];
+    if(pick) u.voice=pick;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
 var voice=null;
 function loadVoice(clip){
   if(voice){ try{ voice.pause(); }catch(e){} voice.removeAttribute("src"); voice.remove(); voice=null; }
@@ -1575,10 +1594,16 @@ endNoteBtn.addEventListener("click",function(){
   endNote.hidden = !show;
   endLede.hidden = show;                       // the note takes the caption's place
   endNoteTxt.textContent = show ? "Hide" : "Show the note";
-  if(show && voice && voice.dataset.ready==="1"){
-    try{ voice.currentTime=0; voice.play().catch(function(){}); }catch(e){}
+  if(show){
+    if(voice && voice.dataset.ready==="1"){
+      try{ voice.currentTime=0; voice.play().catch(function(){}); }catch(e){}
+    }else{
+      sayAloud(endNote.textContent);   // no recorded file: this machine reads it
+    }
+  }else{
+    if(voice){ try{ voice.pause(); }catch(e){} }
+    try{ window.speechSynthesis && speechSynthesis.cancel(); }catch(e){}
   }
-  if(!show && voice){ try{ voice.pause(); }catch(e){} }
 });
 replayBtn.addEventListener("click",replay);
 igReplay.addEventListener("click",replay);
