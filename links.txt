@@ -1,7 +1,7 @@
 # Family Guy short clips - official @FamilyGuyFOX channel
 # One link per line, in view order (most watched first).
 # Put a # in front of a line to park it without deleting it.
-# 191 live links. 37 more are commented out below.
+# 191 live links. 48 more are commented out below.
 
 https://www.youtube.com/watch?v=Lun4z5hMSAY
 https://www.youtube.com/watch?v=fKTaYOTCDsA
