@@ -1,26 +1,15 @@
 # Family Guy short clips - official @FamilyGuyFOX channel
 # One link per line, in view order (most watched first).
 # Put a # in front of a line to park it without deleting it.
-# 200 live links. 35 more are held in reserve below.
+# 191 live links. 37 more are commented out below.
 
-https://www.youtube.com/watch?v=ceYsWR8pbkE
 https://www.youtube.com/watch?v=Lun4z5hMSAY
-https://www.youtube.com/watch?v=5lC8TL-BeOQ
 https://www.youtube.com/watch?v=fKTaYOTCDsA
-https://www.youtube.com/watch?v=u9dxd5pJnMs
 https://www.youtube.com/watch?v=VfQeYkmymfQ
-https://www.youtube.com/watch?v=D3MdOzKUVpw
 https://www.youtube.com/watch?v=nfVEvgWd4ek
 https://www.youtube.com/watch?v=8RmOKQFgr54
-https://www.youtube.com/watch?v=n0ah4SqoDWQ
-https://www.youtube.com/watch?v=RQlRdDe6ve0
 https://www.youtube.com/watch?v=i7Lq-_Thvxk
-https://www.youtube.com/watch?v=lNfCvZl3sKw
-https://www.youtube.com/watch?v=8P6r8qdcb14
-https://www.youtube.com/watch?v=jONjcAzZX3A
-https://www.youtube.com/watch?v=gXe477UWr4Q
 https://www.youtube.com/watch?v=SoG7VjTqxM4
-https://www.youtube.com/watch?v=Sq3cn1HGOeA
 https://www.youtube.com/watch?v=_D7E7HcOpDU
 https://www.youtube.com/watch?v=1aSy8uZ0ZGY
 https://www.youtube.com/watch?v=LaUoZ0bBODk
@@ -246,3 +235,22 @@ https://www.youtube.com/watch?v=s0Dt_KIzivY
 # ---- held back: the title mentions something awkward for a lecture screen ----
 # https://www.youtube.com/watch?v=3Wk18VfEncE   Meg Has A Sexy Dream About Santa | Season 18 Ep. 9 | FAMILY GUY
 # https://www.youtube.com/watch?v=j7zFYpMBS-4   Brian Meets His Coworker At The Suicide Hotline | Season 16 Ep. 
+
+
+# ---- added by hand ----
+https://www.youtube.com/watch?v=MRta5VOO8hE
+https://www.youtube.com/watch?v=pqaz3wy6KQc
+
+
+# ---- dropped during review on 2026-08-28 (11) - delete the # to bring one back ----
+# https://www.youtube.com/watch?v=ceYsWR8pbkE
+# https://www.youtube.com/watch?v=5lC8TL-BeOQ
+# https://www.youtube.com/watch?v=u9dxd5pJnMs
+# https://www.youtube.com/watch?v=D3MdOzKUVpw
+# https://www.youtube.com/watch?v=n0ah4SqoDWQ
+# https://www.youtube.com/watch?v=RQlRdDe6ve0
+# https://www.youtube.com/watch?v=lNfCvZl3sKw
+# https://www.youtube.com/watch?v=8P6r8qdcb14
+# https://www.youtube.com/watch?v=jONjcAzZX3A
+# https://www.youtube.com/watch?v=gXe477UWr4Q
+# https://www.youtube.com/watch?v=Sq3cn1HGOeA
