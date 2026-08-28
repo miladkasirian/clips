@@ -116,6 +116,22 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
   stroke-linecap:round;stroke-linejoin:round}
 .notewrap .mic.rec{background:var(--no);color:#2a0308;border-color:transparent;animation:mic 1.2s ease-in-out infinite}
 .notewrap .mic.busy{opacity:.55;pointer-events:none}
+/* while it is listening, something has to move - otherwise there is no way to
+   know whether the microphone is actually hearing you */
+.recbar{position:absolute;left:8px;right:8px;bottom:8px;display:flex;align-items:center;gap:9px;
+  height:38px;padding:0 9px;border-radius:12px;
+  background:rgba(255,95,109,.14);border:1px solid rgba(255,95,109,.45)}
+.recbar[hidden]{display:none}
+.recbar .dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--no);
+  animation:mic 1.2s ease-in-out infinite}
+.recbar .rt{flex:none;font-family:var(--mono);font-size:12px;color:#ffd9dc;min-width:34px}
+.recbar .lvl{flex:1;height:6px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden}
+.recbar .lvl i{display:block;height:100%;width:0;border-radius:99px;
+  background:linear-gradient(90deg,var(--ok),var(--gold));transition:width .07s linear}
+.recbar .send{flex:none;height:28px;padding:0 13px;border-radius:9px;cursor:pointer;font-family:inherit;
+  font-size:12.5px;font-weight:750;border:0;background:var(--ok);color:#04121a}
+.recbar .cx{flex:none;width:28px;height:28px;border-radius:9px;cursor:pointer;font-size:15px;line-height:1;
+  border:1px solid var(--line2);background:rgba(255,255,255,.07);color:var(--dim)}
 .notewrap .lang{position:absolute;right:46px;top:8px;height:32px;padding:0 9px;border-radius:10px;cursor:pointer;
   font-family:var(--mono);font-size:11px;font-weight:800;letter-spacing:.5px;
   border:1px solid var(--line2);background:rgba(255,255,255,.06);color:var(--dim)}
@@ -158,8 +174,9 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
 }
 .rhead em{flex:none;font-style:normal;font-size:11px;color:var(--ok)}
 .rnote{font-size:12.5px;color:var(--dim);padding:0 12px 10px;line-height:1.5}
-.rbody input.ni{width:100%;height:40px;border-radius:11px;padding:0 12px;font-family:inherit;font-size:13px;
-  color:var(--txt);background:rgba(255,255,255,.05);border:1px solid var(--line2);margin-top:9px}
+.rbody .rowtools{margin-top:9px}
+.rbody .rowtools textarea{height:78px}
+.rbody .aistat{padding:4px 2px 0}
 
 /* ---------- decision ---------- */
 footer{flex:none;padding-top:10px;margin-top:auto}
@@ -316,27 +333,27 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
           <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg> Undo
         </button>
       </div>
-      <div class="notewrap">
-        <textarea id="noteIn" maxlength="600" spellcheck="false"
+      <div class="notewrap" id="deckTools">
+        <textarea data-note maxlength="600" spellcheck="false"
           name="clip-note" autocomplete="off" autocorrect="off" autocapitalize="sentences"
           data-lpignore="true" data-1p-ignore data-form-type="other"
-          placeholder="Note for this clip &mdash; shown when it ends (optional)"></textarea>
-        <button class="sv" id="noteSave" type="button" title="Save the note" aria-label="Save note">
+          placeholder="Note for this clip &mdash; shown when it ends. Type it, or press the microphone and just talk."></textarea>
+        <button class="sv" data-save type="button" title="Save the note" aria-label="Save note">
           <svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg>
         </button>
-        <button class="spk" id="noteSpeak" type="button" title="Make the spoken version" aria-label="Make the spoken version">
-          <svg viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
-        </button>
-        <button class="mic" id="noteMic" type="button" title="Say it out loud instead of typing" aria-label="Record a voice note">
+        <button class="mic" data-mic type="button" title="Talk instead of typing" aria-label="Record a voice note">
           <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
         </button>
-        <button class="lang" id="micLang" type="button" title="The language you will speak">EN</button>
-        <button class="pol" id="notePolish" type="button" title="Tidy it into short, natural English" aria-label="Tidy the note">
-          <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5z"/><path d="M18 15l.9 2.2L21 18l-2.1.8L18 21l-.9-2.2L15 18l2.1-.8z"/></svg>
-        </button>
+        <div class="recbar" data-recbar hidden>
+          <span class="dot"></span>
+          <span class="rt" data-timer>0:00</span>
+          <div class="lvl"><i data-level></i></div>
+          <button class="send" data-send type="button">Send</button>
+          <button class="cx" data-cancel type="button" title="Throw it away">&times;</button>
+        </div>
       </div>
     </div>
-    <p class="aistat" id="aiStat"></p>
+    <p class="aistat" data-status id="aiStat"></p>
     <div class="grid" style="margin-top:9px">
       <button class="act small" id="bLists" type="button">
         <svg viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg> Kept &amp; dropped
@@ -495,8 +512,6 @@ var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$(
     bCopy=$("bCopy"), bDl=$("bDl"), bClose=$("bClose"), shTitle=$("shTitle"), shLede=$("shLede"), kb=$("kb"),
     live=$("live"), liveTxt=$("liveTxt"), flash=$("flash"),
     bExportTxt=$("bExportTxt"), bPubKeepTxt=$("bPubKeepTxt"), mKept=$("mKept"), mAll=$("mAll"),
-    noteIn=$("noteIn"), noteSave=$("noteSave"), noteMic=$("noteMic"), noteSpeak=$("noteSpeak"),
-    micLang=$("micLang"), notePolish=$("notePolish"),
     aiStat=$("aiStat"),
     bLists=$("bLists"), bAdd=$("bAdd"), lists=$("lists"), rows=$("rows"), bListsClose=$("bListsClose"),
     tKept=$("tKept"), tDropped=$("tDropped"), tSkipped=$("tSkipped"), bPubKeep=$("bPubKeep"),
@@ -925,205 +940,218 @@ document.addEventListener("keydown", function(e){
 });
 
 /* =====================================================================
-   DICTATION, FREE
+   NOTE TOOLS
    ---------------------------------------------------------------------
-   The browser can already turn speech into text - no key, no account, no
-   bill. It only writes down what was said; it does not translate, tidy or
-   shorten. That part is a separate press, and it happens wherever you
-   like: paste the text into Claude or ChatGPT and paste the answer back.
+   One module, used by the deck under the video and by every row in the
+   kept/dropped list. Give it a container holding [data-note], [data-mic],
+   [data-save], [data-recbar] and friends, plus a way to ask which clip it
+   is looking at, and it wires the lot.
 
-   If an OpenAI key IS stored, the paid path above is used instead and the
-   whole thing happens in one step. Nothing needs changing to switch - the
-   presence of a key is the switch.
+   What it does NOT do: ask which language you are speaking (the
+   transcriber works that out), ask whether you want it tidied (it always
+   is), or ask whether you want it spoken (it always is). Those were three
+   switches for decisions nobody wants to make.
+
+   The recording is committed to voice-in/ in the repository. That commit
+   sets off a GitHub Action holding the OpenAI key. Nothing here needs a
+   key, so anyone with the page can use it.
    ===================================================================== */
-var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-var LANGKEY = "breaktime.review.lang";
-function dictLang(){ try{ return localStorage.getItem(LANGKEY) || "en-US"; }catch(e){ return "en-US"; } }
-function setDictLang(v){ try{ localStorage.setItem(LANGKEY, v); }catch(e){} paintLang(); }
-function paintLang(){ micLang.textContent = dictLang() === "fa-IR" ? "FA" : "EN"; }
-micLang.addEventListener("click", function(e){
-  e.stopPropagation();
-  setDictLang(dictLang() === "fa-IR" ? "en-US" : "fa-IR");
-  aisay("Dictation set to " + (dictLang()==="fa-IR" ? "Persian" : "English") + ".", "good");
-});
+function noteTools(box, getClip){
+  var note   = box.querySelector("[data-note]"),
+      micBtn = box.querySelector("[data-mic]"),
+      saveBt = box.querySelector("[data-save]"),
+      bar    = box.querySelector("[data-recbar]"),
+      timer  = box.querySelector("[data-timer]"),
+      level  = box.querySelector("[data-level]"),
+      sendBt = box.querySelector("[data-send]"),
+      cancel = box.querySelector("[data-cancel]");
+  // in a list row the status line sits inside the row; in the deck it is a
+  // sibling of the whole button block, so fall back to the page-level one
+  var statusEl = box.querySelector("[data-status]")
+              || (box.closest(".rbody") && box.closest(".rbody").querySelector("[data-status]"))
+              || document.getElementById("aiStat");
 
-var listener = null;
-function freeDictate(){
-  if(listener){ try{ listener.stop(); }catch(e){} return; }
-  if(!SR){
-    aisay("This browser cannot listen. Type the note, or use Chrome.", "bad"); return;
+  var rec=null, chunks=[], stream=null, ac=null, tick=null, started=0, discard=false, watching=null;
+
+  function say(msg, cls){
+    if(!statusEl) return;
+    statusEl.textContent = msg || "";
+    statusEl.className = "aistat" + (cls ? " " + cls : "");
   }
-  var r = new SR();
-  r.lang = dictLang();
-  r.continuous = true;
-  r.interimResults = true;
-  var settled = noteIn.value ? noteIn.value.trim() + " " : "";
-  r.onstart = function(){
-    noteMic.classList.add("rec");
-    aisay("Listening in " + (dictLang()==="fa-IR" ? "Persian" : "English") +
-          " \u2014 press the microphone again to stop.");
-  };
-  r.onresult = function(ev){
-    var live = "";
-    for(var i=ev.resultIndex; i<ev.results.length; i++){
-      var t = ev.results[i][0].transcript;
-      if(ev.results[i].isFinal) settled += t + " "; else live += t;
-    }
-    noteIn.value = (settled + live).replace(/\s+/g," ").trim();
-  };
-  r.onerror = function(ev){
-    aisay(ev.error === "not-allowed"
-      ? "The microphone was blocked. Allow it in the browser and try again."
-      : "Dictation stopped (" + ev.error + ").", "bad");
-  };
-  r.onend = function(){
-    listener = null;
-    noteMic.classList.remove("rec");
-    if(noteIn.value.trim()){
-      saveNote();
-      aisay("Written down. Press \u2728 to have it tidied into short English.", "good");
-    }
-  };
-  listener = r;
-  try{ r.start(); }
-  catch(e){ listener=null; aisay("Could not start listening. Try again.", "bad"); }
-}
+  function clock(ms){
+    var s=Math.floor(ms/1000), m=Math.floor(s/60); s=s%60;
+    return m+":"+(s<10?"0":"")+s;
+  }
+  function showBar(on){
+    bar.hidden = !on;
+    micBtn.classList.toggle("rec", on);
+    note.disabled = on;
+  }
+  function pickMime(){
+    var want=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg"];
+    for(var i=0;i<want.length;i++)
+      if(window.MediaRecorder && MediaRecorder.isTypeSupported(want[i])) return want[i];
+    return "";
+  }
 
-/* ---- the polish handoff: no key, no bill ---- */
-function polishPrompt(text){
-  var secs = AICFG.seconds || 20;
-  return "Rewrite this into the one-line note a lecturer plays after a short comedy clip " +
-    "during a class break.\n\n" +
-    "- Natural, idiomatic American English - the way a person talks, not written prose.\n" +
-    "- Fix all grammar. Keep the meaning and the humour.\n" +
-    "- About " + Math.round(secs*2.6) + " words, so it takes roughly " + secs + " seconds to say out loud. " +
-      "If the original rambles, keep only the point worth hearing.\n" +
-    "- One or two emoji, only where they land.\n" +
-    "- It is read aloud to university students, so keep it clean.\n" +
-    "- Reply with the note itself and nothing else.\n\n" +
-    "Here it is:\n" + text;
-}
-notePolish.addEventListener("click", function(){
-  var text = noteIn.value.trim();
-  if(!text){ aisay("Dictate or type something first.", "bad"); return; }
-  var payload = polishPrompt(text);
-  var done = function(){
-    aisay("Copied with the instructions. Paste it to Claude or ChatGPT, then paste the answer back.", "good");
-  };
-  if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(payload).then(done, function(){ fallbackCopy(payload, done); });
-  } else fallbackCopy(payload, done);
-});
-function fallbackCopy(text, done){
-  var ta = document.createElement("textarea");
-  ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
-  document.body.appendChild(ta); ta.select();
-  try{ document.execCommand("copy"); done(); }catch(e){ aisay("Could not copy. Select the text by hand.", "bad"); }
-  ta.remove();
-}
+  function save(){
+    var clip = getClip(); if(!clip) return;
+    var t = note.value.trim().replace(/\s+/g," ").replace(/\|/g,"/");
+    if(t) NOTES[clip.id]=t; else delete NOTES[clip.id];
+    saveLocal(); pushSide("notes", clip.id, t || null);
+    saveBt.classList.add("saved");
+    setTimeout(function(){ saveBt.classList.remove("saved"); }, 1100);
+    if(lists.classList.contains("open") && !openRow) paintRows();
+    if(cur && clip.id===cur.id && box!==deckBox) paintNote();
+  }
+  saveBt.addEventListener("click", function(e){ e.stopPropagation(); save(); });
+  note.addEventListener("blur", save);
+  var typeTimer=null;
+  note.addEventListener("input", function(){ clearTimeout(typeTimer); typeTimer=setTimeout(save,1200); });
+  note.addEventListener("click", function(e){ e.stopPropagation(); });
+  note.addEventListener("keydown", function(e){
+    if(e.key==="Enter" && (e.ctrlKey||e.metaKey)){ e.preventDefault(); note.blur(); }
+  });
 
-/* =====================================================================
-   SENDING A RECORDING TO BE WRITTEN UP
-   ---------------------------------------------------------------------
-   Nobody here has an OpenAI key, and nobody needs one. The recording is
-   committed to voice-in/ in the repository, and that commit sets off a
-   GitHub Action which holds the key, does the transcribing and the
-   rewriting, and puts the finished note in the shared database. This page
-   simply waits for it to appear - on every phone at once, not just this one.
-
-   Name it "<id>.webm" for text only, or "<id>.voice.webm" to also have the
-   spoken version made.
-   ===================================================================== */
-var wantVoice = false;
-noteSpeak.addEventListener("click", function(){
-  wantVoice = !wantVoice;
-  noteSpeak.classList.toggle("has", wantVoice);
-  aisay(wantVoice
-    ? "The next recording will also be given a spoken version."
-    : "The next recording will be written up as text only.", "good");
-});
-
-function sendRecording(blob, type){
-  if(!cur) return;
-  var id = cur.id;
-  var ext = type.indexOf("mp4") > -1 ? "mp4" : type.indexOf("ogg") > -1 ? "ogg" : "webm";
-  var name = id + (wantVoice ? ".voice." : ".") + ext;
-  noteMic.classList.add("busy");
-  aisay("Sending the recording to be written up\u2026");
-
-  var reader = new FileReader();
-  reader.onload = function(){
-    var b64 = String(reader.result).split(",")[1] || "";
-    gh("contents/voice-in/" + name + "?ref=" + BRANCH).then(function(r){
-      return r.ok ? r.json().then(function(j){ return j.sha; }) : null;
-    }, function(){ return null; }).then(function(sha){
-      var body = {message:"Dictated note for " + id, content:b64, branch:BRANCH};
-      if(sha) body.sha = sha;
-      return gh("contents/voice-in/" + name, {method:"PUT", body:JSON.stringify(body)});
-    }).then(function(r){
-      if(!r.ok) return r.text().then(function(t){
-        throw new Error("could not send it (HTTP " + r.status + ") " + t.slice(0,90)); });
-      aisay("Sent. GitHub is writing it up \u2014 this usually takes under a minute\u2026");
-      awaitNote(id);
-    }).catch(function(e){
-      aisay(String(e.message || e), "bad");
-      noteMic.classList.remove("busy");
-    });
-  };
-  reader.onerror = function(){ aisay("Could not read the recording.", "bad"); noteMic.classList.remove("busy"); };
-  reader.readAsDataURL(blob);
-}
-
-/* wait for the Action to put the note in the database */
-var waiting = null;
-function awaitNote(id){
-  clearInterval(waiting);
-  var before = NOTES[id] || "", tries = 0;
-  waiting = setInterval(function(){
-    tries++;
-    if(tries > 40){                       // about three minutes
-      clearInterval(waiting); noteMic.classList.remove("busy");
-      aisay("It is taking longer than usual. Check the Actions tab on GitHub.", "bad");
+  /* ---- recording, with something to look at while it happens ---- */
+  function startRec(){
+    var clip=getClip();
+    if(!clip){ say("Open a clip first.", "bad"); return; }
+    if(!token()){
+      say("This needs the GitHub token from Export / publish - that is what sends the recording.", "bad");
       return;
     }
-    pullAdded(function(){
-      if((NOTES[id] || "") !== before && NOTES[id]){
-        clearInterval(waiting); noteMic.classList.remove("busy");
-        if(cur && cur.id === id) paintNote();
-        aisay("Written up. Edit it if you like.", "good");
-      }
+    if(!navigator.mediaDevices || !window.MediaRecorder){
+      say("This browser cannot record. Type the note instead.", "bad"); return;
+    }
+    say("Asking for the microphone…");
+    navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){
+      stream=st; chunks=[]; discard=false; started=Date.now();
+      var mime=pickMime();
+      rec = new MediaRecorder(st, mime ? {mimeType:mime} : undefined);
+      rec.ondataavailable=function(e){ if(e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop=function(){
+        stopMeter();
+        st.getTracks().forEach(function(t){ t.stop(); });
+        showBar(false);
+        if(discard){ say("Thrown away."); return; }
+        var type=(rec.mimeType||mime||"audio/webm").split(";")[0];
+        var blob=new Blob(chunks,{type:type});
+        if(blob.size < 1500){ say("That was too short to hear. Try again.", "bad"); return; }
+        send(clip.id, blob, type);
+      };
+      rec.start();
+      showBar(true);
+      say("Listening. Talk in any language, then press Send.");
+      meter(st);
+      tick=setInterval(function(){ timer.textContent = clock(Date.now()-started); }, 250);
+    }).catch(function(){
+      say("The microphone was blocked. Allow it in the browser and try again.", "bad");
     });
-  }, 5000);
+  }
+  /* a live level bar, so it is obvious it is actually hearing you */
+  function meter(st){
+    try{
+      var AC = window.AudioContext || window.webkitAudioContext;
+      ac = new AC();
+      // it starts suspended, and a suspended context reports silence forever -
+      // which looks exactly like a microphone that is not working
+      if(ac.state === "suspended" && ac.resume) ac.resume();
+      var src = ac.createMediaStreamSource(st), an = ac.createAnalyser();
+      an.fftSize = 512; src.connect(an);
+      var buf = new Uint8Array(an.frequencyBinCount);
+      (function draw(){
+        if(!ac) return;
+        an.getByteTimeDomainData(buf);
+        var peak = 0;
+        for(var i=0;i<buf.length;i++){ var d=Math.abs(buf[i]-128); if(d>peak) peak=d; }
+        level.style.width = Math.min(100, Math.round(peak/70*100)) + "%";
+        watching = requestAnimationFrame(draw);
+      })();
+    }catch(e){}
+  }
+  function stopMeter(){
+    clearInterval(tick); tick=null;
+    if(watching) cancelAnimationFrame(watching); watching=null;
+    if(ac){ try{ ac.close(); }catch(e){} ac=null; }
+    level.style.width="0%"; timer.textContent="0:00";
+  }
+  micBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    if(rec && rec.state==="recording"){ discard=false; rec.stop(); return; }
+    startRec();
+  });
+  sendBt.addEventListener("click", function(e){
+    e.stopPropagation();
+    if(rec && rec.state==="recording"){ discard=false; rec.stop(); }
+  });
+  cancel.addEventListener("click", function(e){
+    e.stopPropagation();
+    if(rec && rec.state==="recording"){ discard=true; rec.stop(); }
+  });
+
+  /* ---- hand it to GitHub, then wait for the Action to answer ---- */
+  function send(id, blob, type){
+    var ext = type.indexOf("mp4")>-1 ? "mp4" : type.indexOf("ogg")>-1 ? "ogg" : "webm";
+    // ".voice." asks the workflow for the spoken version too, which is always
+    var name = id + ".voice." + ext;
+    micBtn.classList.add("busy");
+    say("Sending it…");
+    var reader=new FileReader();
+    reader.onload=function(){
+      var b64=String(reader.result).split(",")[1]||"";
+      gh("contents/voice-in/"+name+"?ref="+BRANCH).then(function(r){
+        return r.ok ? r.json().then(function(j){ return j.sha; }) : null;
+      }, function(){ return null; }).then(function(sha){
+        var body={message:"Dictated note for "+id, content:b64, branch:BRANCH};
+        if(sha) body.sha=sha;
+        return gh("contents/voice-in/"+name, {method:"PUT", body:JSON.stringify(body)});
+      }).then(function(r){
+        if(!r.ok) return r.text().then(function(t){
+          throw new Error("could not send it (HTTP "+r.status+") "+t.slice(0,80)); });
+        say("Sent. Writing it up — usually under a minute…");
+        await_(id);
+      }).catch(function(e){
+        say(String(e.message||e), "bad"); micBtn.classList.remove("busy");
+      });
+    };
+    reader.onerror=function(){ say("Could not read the recording.", "bad"); micBtn.classList.remove("busy"); };
+    reader.readAsDataURL(blob);
+  }
+  function await_(id){
+    var before = NOTES[id] || "", n = 0;
+    var poll = setInterval(function(){
+      n++;
+      if(n > 40){
+        clearInterval(poll); micBtn.classList.remove("busy");
+        say("Taking longer than usual. Check the Actions tab on GitHub.", "bad"); return;
+      }
+      pullAdded(function(){
+        if(NOTES[id] && NOTES[id] !== before){
+          clearInterval(poll); micBtn.classList.remove("busy");
+          var clip=getClip();
+          if(clip && clip.id===id) note.value = NOTES[id];
+          if(cur && cur.id===id) paintNote();
+          if(lists.classList.contains("open") && !openRow) paintRows();
+          say("Written up" + (VOICES[id] ? " and recorded." : "."), "good");
+        }
+      });
+    }, 5000);
+  }
+
+  return { refresh:function(){ var c=getClip(); note.value = c ? (NOTES[c.id]||"") : ""; note.disabled = !c; } };
 }
 
-noteMic.addEventListener("click", function(){
-  if(rec && rec.state === "recording"){ stopRec(); return; }
-  // With a GitHub token the recording can be sent off and written up properly.
-  // Without one there is nowhere to send it, so the browser writes down what it
-  // hears instead - free, instant, and in whatever language you spoke.
-  if(!token()){ freeDictate(); return; }
-  if(!navigator.mediaDevices || !window.MediaRecorder){ freeDictate(); return; }
-  aisay("Asking for the microphone\u2026");
-  navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
-    var mime = pickMime();
-    chunks = [];
-    rec = new MediaRecorder(stream, mime ? {mimeType:mime} : undefined);
-    rec.ondataavailable = function(e){ if(e.data && e.data.size) chunks.push(e.data); };
-    rec.onstop = function(){
-      stream.getTracks().forEach(function(t){ t.stop(); });
-      noteMic.classList.remove("rec");
-      var type = (rec.mimeType || mime || "audio/webm").split(";")[0];
-      var blob = new Blob(chunks, {type:type});
-      if(blob.size < 1200){ aisay("That was too short to hear. Try again.", "bad"); return; }
-      sendRecording(blob, type);
-    };
-    rec.start();
-    noteMic.classList.add("rec");
-    aisay("Listening \u2014 press the microphone again when you are done.");
-  }).catch(function(){
-    aisay("The microphone was blocked. Allow it in the browser and try again.", "bad");
-  });
-});
+var deckBox = document.getElementById("deckTools");
+var deckTools = noteTools(deckBox, function(){ return cur; });
+function paintNote(){
+  deckTools.refresh();
+  aisay(cur && VOICES[cur.id] ? "This clip already has a spoken version." : "");
+}
+function aisay(msg, cls){
+  aiStat.textContent = msg || "";
+  aiStat.className = "aistat" + (cls ? " " + cls : "");
+}
 
 /* =====================================================================
    THE TWO LISTS
@@ -1161,31 +1189,31 @@ function paintRows(){
     row.innerHTML =
       '<div class="rhead"><b>Clip ' + pad(it.n) + '</b>' +
       '<span>' + (it.added ? "added by hand" : it.id) + '</span>' +
-      '<span class="edt" title="Open this clip in the note editor"><svg viewBox="0 0 24 24">' +
-      '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>' +
       '<span class="mvi" title="Move to the other list"><svg viewBox="0 0 24 24">' +
       '<path d="M7 7h13l-3-3"/><path d="M17 17H4l3 3"/></svg></span>' +
       '<span class="go"><svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg></span></div>' +
       (NOTES[it.id] ? '<div class="rnote"></div>' : "") +
       '<div class="rbody"><div class="frame"></div>' +
-      '<input class="ni" type="text" maxlength="140" placeholder="Note shown when this clip ends">' +
+      '<div class="notewrap rowtools">' +
+        '<textarea data-note maxlength="600" spellcheck="false" autocomplete="off"' +
+        ' data-lpignore="true" data-1p-ignore data-form-type="other"' +
+        ' placeholder="Note shown when this clip ends. Type it, or press the microphone."></textarea>' +
+        '<button class="sv" data-save type="button" title="Save">' +
+          '<svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg></button>' +
+        '<button class="mic" data-mic type="button" title="Talk instead of typing">' +
+          '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/>' +
+          '<path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>' +
+        '<div class="recbar" data-recbar hidden><span class="dot"></span>' +
+          '<span class="rt" data-timer>0:00</span><div class="lvl"><i data-level></i></div>' +
+          '<button class="send" data-send type="button">Send</button>' +
+          '<button class="cx" data-cancel type="button">&times;</button></div>' +
+      '</div>' +
+      '<p class="aistat" data-status></p>' +
       '<button class="mv" type="button">Move to ' + (other === "keep" ? "kept" : "dropped") + '</button></div>';
     if(NOTES[it.id]) row.querySelector(".rnote").textContent = NOTES[it.id];
-    var ni = row.querySelector(".ni");
-    ni.value = NOTES[it.id] || "";
-    ni.addEventListener("click", function(e){ e.stopPropagation(); });
-    function saveHere(){
-      var t = ni.value.trim().replace(/\s+/g," ").replace(/\|/g,"/");
-      if(t) NOTES[it.id] = t; else delete NOTES[it.id];
-      saveLocal(); pushSide("notes", it.id, t || null);
-      var box = row.querySelector(".rnote");
-      if(t && !box){ var d=document.createElement("div"); d.className="rnote"; d.textContent=t;
-                     row.insertBefore(d, row.querySelector(".rbody")); }
-      else if(box){ box.textContent = t; box.style.display = t ? "" : "none"; }
-      if(cur && cur.id === it.id) paintNote();
-    }
-    ni.addEventListener("blur", saveHere);
-    ni.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); ni.blur(); } });
+    // the same module the deck uses, pointed at this row's clip
+    var tools = noteTools(row.querySelector(".rowtools"), function(){ return it; });
+    tools.refresh();
 
     row.querySelector(".rhead").addEventListener("click", function(){
       if(row === openRow){ closeRow(); return; }
@@ -1212,16 +1240,6 @@ function paintRows(){
     // moved without having to start it playing first
     // Rather than a second set of microphone and voice buttons in every row,
     // the row hands the clip to the one editor that already has them.
-    row.querySelector(".edt").addEventListener("click", function(e){
-      e.stopPropagation();
-      sheetShut(lists);
-      unfinish();
-      cur = it; curVerdict = STATE[it.id] || null;
-      num.innerHTML = "Clip " + pad(it.n) + "<em>" + WORD[STATE[it.id]] + " \u2014 editing the note</em>";
-      num.setAttribute("data-clip", pad(it.n));
-      paintNote(); mount(it);
-      setTimeout(function(){ noteIn.focus(); }, 400);
-    });
     row.querySelector(".mvi").addEventListener("click", move);
     row.querySelector(".mv").addEventListener("click", move);
     rows.appendChild(row);
@@ -1264,7 +1282,8 @@ function pullAdded(done){
       VOICES = o.voices || {};
       // a note being edited on this phone right now must not be overwritten by
       // the copy the server still has
-      var live = (document.activeElement === noteIn && cur) ? cur.id : null;
+      var typing = document.activeElement;
+      var live = (cur && typing && typing.matches && typing.matches("[data-note]")) ? cur.id : null;
       var mine = live ? NOTES[live] : null;
       NOTES = o.notes || {};
       if(live) NOTES[live] = mine;
@@ -1281,40 +1300,6 @@ function pushSide(child, id, val){
 }
 function pushAdded(id, rec){ ADDED[id] = rec; pushSide("added", id, rec); }
 
-/* ---------------- the note on the clip in front of you ---------------- */
-var noteTimer = null;
-function paintNote(){
-  noteIn.value = cur ? (NOTES[cur.id] || "") : "";
-  noteIn.disabled = !cur;
-  noteSave.classList.remove("saved");
-  // the speaker is a switch for the NEXT recording, not a report on this clip
-  noteSpeak.classList.toggle("has", wantVoice);
-  noteSpeak.title = wantVoice
-    ? "The next recording will also get a spoken version - press to turn that off"
-    : "Also make a spoken version of the next recording";
-  aisay(cur && VOICES[cur.id] ? "This clip already has a spoken version." : "");
-}
-function saveNote(){
-  if(!cur) return;
-  var id = cur.id, txt = noteIn.value.trim().replace(/\s+/g," ").replace(/\|/g,"/");
-  if(txt) NOTES[id] = txt; else delete NOTES[id];
-  saveLocal();
-  pushSide("notes", id, txt || null);
-  noteSave.classList.add("saved");
-  setTimeout(function(){ noteSave.classList.remove("saved"); }, 1200);
-  if(lists.classList.contains("open") && !openRow) paintRows();
-}
-noteSave.addEventListener("click", saveNote);
-noteIn.addEventListener("blur", saveNote);
-noteIn.addEventListener("keydown", function(e){
-  // it is a textarea now, so Enter belongs to the text; Ctrl/Cmd+Enter finishes
-  if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); noteIn.blur(); }
-});
-// typing must not be read as a shortcut, and a pause should save on its own so a
-// note is never lost by moving on without pressing anything
-noteIn.addEventListener("input", function(){
-  clearTimeout(noteTimer); noteTimer = setTimeout(saveNote, 1200);
-});
 function resLine(kind, url, note){
   var d = document.createElement("div");
   d.className = "res " + kind;
@@ -1646,7 +1631,7 @@ fetch(LIST_URL, {cache:"no-store"})
     for(var k in STATE) if(!seen[k] && !ADDED[k]) delete STATE[k];
     HIST = HIST.filter(function(id){ return seen[id]; });
     show();                 // the cached view paints immediately
-    paintPub(); paintLang();
+    paintPub();
     startStream();          // and the shared one lands on top of it
     // hand-added links live beside the decisions; fetch them, then keep an eye
     // on them in case the other phone adds one
@@ -1654,7 +1639,16 @@ fetch(LIST_URL, {cache:"no-store"})
     setInterval(function(){ if(!document.hidden) pullAdded(); }, 20000);
   })
   .catch(function(e){
-    num.textContent = "Could not read links.txt";
+    if(ITEMS.length){
+      // the file was read perfectly well; something after it went wrong. Saying
+      // "could not read links.txt" here sent me hunting in the wrong place for
+      // an hour, and wiping the stage broke the next clip as well.
+      console.error("after loading the list:", e);
+      num.textContent = "Clip list loaded, but something else failed";
+      aisay(String(e && e.message || e), "bad");
+      return;
+    }
+    num.textContent = "Could not read the clip list";
     stage.innerHTML = '<div class="msg">' + String(e.message) +
       '<br><br>This page reads <code>candidates.txt</code> from its own folder &mdash; the full pool of clips ever considered. ' +
       'That is deliberately a different file from the <code>links.txt</code> the site plays.</div>';
