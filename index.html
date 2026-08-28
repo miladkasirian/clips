@@ -168,6 +168,12 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
   gap:16px;padding:26px;text-align:center;background:rgba(4,7,14,.92);backdrop-filter:blur(8px)}
 .endcard.show,.errcard.show{display:flex}
 .endcard p{font-size:14px;color:var(--txt-dim)}
+/* whatever was written about this clip, shown once it has finished */
+.endcard p.note{font-size:16.5px;line-height:1.55;font-weight:600;color:var(--txt);
+  max-width:44ch;letter-spacing:-.1px}
+.endcard p.note::before{content:"";display:block;width:34px;height:3px;border-radius:99px;
+  margin:0 auto 12px;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+.endcard p.note[hidden]{display:none}
 .errcard .h{font-size:15px;font-weight:650;color:var(--danger)}
 .errcard .d{font-size:12.5px;color:var(--txt-dim);line-height:1.6;max-width:38ch}
 .errcard code{font-family:var(--mono);font-size:11.5px;color:var(--gold);word-break:break-all}
@@ -350,6 +356,7 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
         <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><b>Play again</b>
       </button>
       <div class="endcard" id="endcard">
+        <p class="note" id="endNote" hidden></p>
         <p>Clip finished</p>
         <button class="btn primary" style="flex:none;padding:0 22px" id="endReplay" type="button">
           <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg> Play again
@@ -808,7 +815,7 @@ var DATA_URL = "";
 
 var $=function(id){return document.getElementById(id);};
 var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),counter=$("counter"),
-    player=$("player"),wrap=$("wrap"),shell=$("shell"),loading=$("loading"),endcard=$("endcard"),igReplay=$("igReplay"),
+    player=$("player"),wrap=$("wrap"),shell=$("shell"),loading=$("loading"),endcard=$("endcard"),endNote=$("endNote"),igReplay=$("igReplay"),
     errcard=$("errcard"),errH=$("errH"),errD=$("errD"),
     pTopic=$("pTopic"),pKind=$("pKind"),pTitle=$("pTitle"),pCreator=$("pCreator"),pNote=$("pNote"),
     replayBtn=$("replayBtn"),endReplay=$("endReplay"),
@@ -1426,10 +1433,12 @@ function mount(clip){
 function openPlayer(clip){
   if(!clip) return;
   current=clip; retriedOnce=false;
+  var note=(clip.note||"").trim();
+  endNote.textContent=note; endNote.hidden=!note;
   pTopic.textContent=clip.topic||"";
   pTitle.textContent=clip.untitled ? ("Clip "+pad(clip.id)) : (clip.title||"");
   pCreator.textContent=clip.creator?("by "+clip.creator):"";
-  var link=clip.link||clip.url||srcOf(clip);
+  var link=String(clip.link||clip.url||srcOf(clip)).split("|")[0].trim();
   openBtn.hidden = kindOf(clip).kind==="file" || !/^https?:/i.test(String(link));
   openBtn.onclick=function(){ window.open(link,"_blank","noopener"); };
   mount(clip);
@@ -1706,10 +1715,24 @@ function loadLinks(s){
   return fetch(toUrl(url),{cache:"no-store"})
     .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.text(); })
     .then(function(txt){
-      var lines=txt.split(/\r?\n/).map(function(l){ return l.trim(); })
+      // Windows editors and PowerShell put a byte-order mark at the head of a
+      // UTF-8 file. It is invisible, and it sits BEFORE the "#" of the first
+      // line - so without this the top comment stops looking like a comment and
+      // becomes a clip with no video in it.
+      var lines=txt.replace(/^\uFEFF/,"").split(/\r?\n/)
+                   .map(function(l){ return l.replace(/^\uFEFF/,"").trim(); })
                    .filter(function(l){ return l && l.charAt(0)!=="#" && l.slice(0,2)!=="//"; });
       if(!lines.length) throw new Error("<code>"+esc(url)+"</code> has no links in it");
-      return { clips:tagClips(lines,s), msg:lines.length+" link(s) from <code>"+esc(url)+"</code>" };
+      // A line may carry a note after a vertical bar:
+      //   https://www.youtube.com/watch?v=ID | what this clip is
+      // A bar cannot appear unescaped inside a URL, so this can never split a
+      // link by accident, and a file with no notes parses exactly as before.
+      var entries=lines.map(function(l){
+        var i=l.indexOf("|");
+        if(i<0) return {src:l};
+        return { src:l.slice(0,i).trim(), note:l.slice(i+1).trim() };
+      });
+      return { clips:tagClips(entries,s), msg:lines.length+" link(s) from <code>"+esc(url)+"</code>" };
     });
 }
 
