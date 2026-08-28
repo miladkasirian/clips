@@ -1118,6 +1118,37 @@ function stamp(){
   return d.getFullYear() + "-" + p(d.getMonth()+1) + "-" + p(d.getDate()) +
          "_" + p(d.getHours()) + p(d.getMinutes());
 }
+var KEEP_BACKUPS = 10;
+/* Backups pile up one per publish. Keep the ten most recent and remove the rest.
+   Two rules make this safe to run unattended:
+     - only files matching this page's own naming pattern are ever considered, so
+       anything else that lands in backups/ is untouchable;
+     - it runs only AFTER the publish has fully succeeded, so a failure earlier on
+       can never cost you a backup.
+   Deleted files are still in the repository's history, so "removed" means removed
+   from the folder, not gone. */
+var BACKUP_RE = /^links-\d{4}-\d{2}-\d{2}_\d{4}\.txt$/;
+function pruneBackups(){
+  return gh("contents/backups?ref=" + BRANCH).then(function(r){
+    if(!r.ok) return null;               // no folder yet, or unreadable - nothing to do
+    return r.json();
+  }).then(function(list){
+    if(!list || !list.length) return {removed:0, kept:0};
+    var mine = list.filter(function(f){ return f.type === "file" && BACKUP_RE.test(f.name); });
+    // the name sorts chronologically, so plain string order is date order
+    mine.sort(function(a,b){ return a.name < b.name ? 1 : a.name > b.name ? -1 : 0; });
+    var stale = mine.slice(KEEP_BACKUPS);
+    if(!stale.length) return {removed:0, kept:mine.length};
+    return stale.reduce(function(chain, f){
+      return chain.then(function(n){
+        return gh("contents/backups/" + encodeURIComponent(f.name), {
+          method:"DELETE",
+          body: JSON.stringify({message:"Remove old backup " + f.name, sha:f.sha, branch:BRANCH})
+        }).then(function(r){ return n + (r.ok ? 1 : 0); }, function(){ return n; });
+      });
+    }, Promise.resolve(0)).then(function(n){ return {removed:n, kept:KEEP_BACKUPS}; });
+  }, function(){ return null; });
+}
 function pub(msg, colour){
   pubMsg.textContent = msg;
   pubMsg.style.color = colour === "bad" ? "var(--no)" : colour === "good" ? "var(--ok)" : "var(--dim)";
@@ -1164,7 +1195,16 @@ bPublish.addEventListener("click", function(){
       });
     }).then(function(r){
       if(!r.ok) return r.text().then(function(x){ throw new Error("Publish failed (HTTP " + r.status + "). " + x.slice(0,120)); });
-      pub("Done \u2014 " + live + " clips are on the site. Give GitHub a minute, then refresh the main page. The old list is in backups/.", "good");
+      pub("Done \u2014 " + live + (live===1?" clip is":" clips are") + " on the site. Tidying old backups\u2026", "good");
+      // the publish is already safe at this point; whatever happens next is
+      // housekeeping and must not be reported as a failed publish
+      return pruneBackups().then(function(res){
+        var tail = !res ? " Could not check the backups folder."
+                 : res.removed ? (" Kept the " + KEEP_BACKUPS + " newest backups and removed " +
+                                  res.removed + " older " + (res.removed===1?"one.":"ones."))
+                 : " Backups are already down to the newest " + KEEP_BACKUPS + " or fewer.";
+        pub("Done \u2014 " + live + (live===1?" clip is":" clips are") + " on the site. Give GitHub a minute, then refresh the main page." + tail, "good");
+      });
     });
   }).catch(function(e){
     pub(String(e.message || e), "bad");
