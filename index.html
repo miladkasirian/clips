@@ -84,7 +84,9 @@ h1 em{font-style:normal;background:linear-gradient(96deg,#ff5d8f,var(--gold) 45%
 .cell{height:118px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0 20px;text-align:center}
 .cell .t{font-size:16.5px;font-weight:650;letter-spacing:-.25px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .cell .m{font-size:11.5px;color:var(--txt-faint);letter-spacing:.5px;font-weight:600;text-transform:uppercase}
+.cell .t.q{font-size:44px;font-weight:800;line-height:1;letter-spacing:-2px;color:var(--txt-faint)}
 .window.won .cell.hit .t{color:var(--gold);text-shadow:0 0 24px rgba(255,200,97,.5)}
+.window.won .cell.hit .t.q{color:var(--gold)}
 
 .spin{margin-top:20px;width:100%;height:58px;border:0;border-radius:15px;cursor:pointer;position:relative;overflow:hidden;
   font-family:inherit;font-size:16px;font-weight:750;letter-spacing:.6px;color:#04121a;
@@ -294,16 +296,16 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 
 <script type="application/json" id="fallback">
 {"clips":[
-{"title": "How to Value a Company - Part 1: Free Cash Flow", "creator": "Benevolent Brokers", "topic": "Valuation / Free Cash Flow", "src": "https://www.instagram.com/reel/DV-g3wmDaLe/", "id": 1},
-{"title": "Cash Flow Is Not the Same as Profitability", "creator": "Nosakhare Tunde-Oni", "topic": "Financial Statements / Cash Flow", "src": "https://www.instagram.com/reel/DbTc4RARpM8/", "id": 2},
-{"title": "How to Read a Balance Sheet", "creator": "Brian Feroldi", "topic": "Financial Statements / Balance Sheet", "src": "https://www.instagram.com/reel/C5waK5hCueF/", "id": 3},
-{"title": "Inflation, Explained in Under 60 Seconds", "creator": "Asia School of Business", "topic": "Inflation / Macro Context", "src": "https://www.instagram.com/reel/DQT-B4hDeBT/", "id": 4},
-{"title": "Compound Interest Explained (Pop-Culture Analogy)", "creator": "Ethan Zhou", "topic": "Time Value of Money", "src": "https://www.instagram.com/reel/DUxvYljkbpI/", "id": 5},
-{"title": "What Is Compound Interest?", "creator": "Muhammad Lambat | Halal Investing", "topic": "Time Value of Money", "src": "https://www.instagram.com/reel/C0-AdLmLrvl/", "id": 6},
-{"title": "Why Start Investing NOW", "creator": "Investa", "topic": "Time Value of Money / Investing", "src": "https://www.instagram.com/reel/DGkuYTxNfC9/", "id": 7},
-{"title": "There Is No Investing Without Risk", "creator": "Financial Markets Authority", "topic": "Risk and Return", "src": "https://www.instagram.com/reel/DWU3fhODy8D/", "id": 8},
-{"title": "Diversification Means Spreading Your Risk", "creator": "The Market Hustle", "topic": "Risk and Return / Portfolio", "src": "https://www.instagram.com/reel/DINQmPovQz7/", "id": 9},
-{"title": "The Fed Held Interest Rates Steady", "creator": "C-SPAN", "topic": "Interest Rates / Monetary Policy", "src": "https://www.instagram.com/reel/DZuvMeroodu/", "id": 10}
+{"src": "https://www.instagram.com/reel/DV-g3wmDaLe/", "id": 1},
+{"src": "https://www.instagram.com/reel/DbTc4RARpM8/", "id": 2},
+{"src": "https://www.instagram.com/reel/C5waK5hCueF/", "id": 3},
+{"src": "https://www.instagram.com/reel/DQT-B4hDeBT/", "id": 4},
+{"src": "https://www.instagram.com/reel/DUxvYljkbpI/", "id": 5},
+{"src": "https://www.instagram.com/reel/C0-AdLmLrvl/", "id": 6},
+{"src": "https://www.instagram.com/reel/DGkuYTxNfC9/", "id": 7},
+{"src": "https://www.instagram.com/reel/DWU3fhODy8D/", "id": 8},
+{"src": "https://www.instagram.com/reel/DINQmPovQz7/", "id": 9},
+{"src": "https://www.instagram.com/reel/DZuvMeroodu/", "id": 10}
 ]}
 </script>
 
@@ -334,7 +336,7 @@ var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),c
     srcChip=$("srcChip"),srcTxt=$("srcTxt"),sndChip=$("sndChip"),fileIn=$("fileIn"),toastEl=$("toast"),
     panel=$("panel"),panelBody=$("panelBody");
 
-var CLIPS=[],SOURCE="built-in copy",spinning=false,current=null,loadTimer=null,msgHook=null;
+var CLIPS=[],SOURCE="built-in copy",spinning=false,current=null,loadTimer=null,msgHook=null,deadTimer=null,rerolls=0;
 var PAGE_IS_LOCAL = location.protocol === "file:";
 
 /* ---------------- helpers ---------------- */
@@ -420,6 +422,102 @@ function syncWidth(){
   if(w>0) wrap.style.setProperty("--w", w+"px");
 }
 
+/* =====================================================================
+   DEAD-LINK GUARD
+   ---------------------------------------------------------------------
+   Instagram's own embed script talks to this page. A reel that still exists
+   reports  LOADING -> MEASURE{height} -> MOUNTED. One that has been deleted
+   reports LOADING and then nothing at all. That is the whole test, and it
+   needs no server, no API and no key.
+
+   Two layers, both silent:
+     1. after the page loads, every Instagram link is probed in a hidden
+        iframe, a few at a time, and dead ones leave the pool before you
+        ever spin. Verdicts are cached for the day, so this runs once.
+     2. if a dead one slips through anyway, the player notices within a few
+        seconds and rolls again by itself. Nothing shows on screen.
+   ===================================================================== */
+var GUARD_KEY="clipGuard.v1", GUARD_TTL_DAYS=1, PROBE_MS=7000, PLAY_MS=5000;
+var guard={day:"",dead:{},ok:{}};
+
+function today(){ return new Date().toISOString().slice(0,10); }
+function guardLoad(){
+  try{
+    var g=JSON.parse(localStorage.getItem(GUARD_KEY)||"{}");
+    var age=(new Date(today())-new Date(g.day||"1970-01-01"))/86400000;
+    if(g.day && age<GUARD_TTL_DAYS){ guard=g; guard.dead=g.dead||{}; guard.ok=g.ok||{}; return true; }
+  }catch(e){}
+  guard={day:today(),dead:{},ok:{}};
+  return false;
+}
+function guardSave(){ try{ guard.day=today(); localStorage.setItem(GUARD_KEY,JSON.stringify(guard)); }catch(e){} }
+
+/* loads one Instagram embed out of sight and waits for its MOUNTED ping */
+function probeInstagram(id){
+  return new Promise(function(resolve){
+    var f=document.createElement("iframe"), done=false, timer;
+    f.setAttribute("aria-hidden","true"); f.setAttribute("tabindex","-1");
+    f.style.cssText="position:fixed;left:-9999px;top:0;width:400px;height:600px;border:0;opacity:0;pointer-events:none";
+    f.setAttribute("sandbox","allow-scripts allow-same-origin");
+    function finish(alive){
+      if(done) return; done=true;
+      clearTimeout(timer); window.removeEventListener("message",onMsg);
+      try{ f.removeAttribute("src"); f.remove(); }catch(e){}
+      resolve(alive);
+    }
+    function onMsg(e){
+      if(!f.contentWindow || e.source!==f.contentWindow) return;
+      var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(x){ return; } }
+      if(d && (d.type==="MOUNTED" || (d.type==="MEASURE" && d.details && d.details.height>420))) finish(true);
+    }
+    window.addEventListener("message",onMsg);
+    timer=setTimeout(function(){ finish(false); },PROBE_MS);
+    f.src="https://www.instagram.com/reel/"+id+"/embed/captioned/";
+    document.body.appendChild(f);
+  });
+}
+
+/* quietly walk the Instagram links after boot; the pool shrinks as answers arrive */
+function backgroundVerify(){
+  var cached=guardLoad();
+  var todo=[];
+  CLIPS.forEach(function(c){
+    var k=kindOf(c); if(k.kind!=="instagram"||!k.id) return;
+    if(guard.dead[k.id]||guard.ok[k.id]) return;
+    todo.push({clip:c,id:k.id});
+  });
+  dropDead();                                  // apply whatever the cache already knows
+  if(!todo.length){ return; }
+  var i=0, LANES=3, running=0, changed=false;
+  function next(){
+    if(i>=todo.length){ if(!running&&changed){ guardSave(); dropDead(); } return; }
+    var item=todo[i++]; running++;
+    probeInstagram(item.id).then(function(alive){
+      (alive?guard.ok:guard.dead)[item.id]=1;
+      if(!alive) changed=true;
+      running--;
+      if(!alive) dropDead();
+      next();
+    });
+  }
+  for(var n=0;n<LANES;n++) next();
+  setTimeout(guardSave,PROBE_MS*2);
+}
+
+/* remove anything known-dead from the pool, without disturbing a spin in progress */
+function dropDead(){
+  var before=CLIPS.length;
+  CLIPS=CLIPS.filter(function(c){
+    var k=kindOf(c);
+    return !(k.kind==="instagram" && k.id && guard.dead[k.id]);
+  });
+  if(CLIPS.length!==before){
+    CLIPS.forEach(function(c,i){ c.id=i+1; });
+    srcTxt.textContent=CLIPS.length+" clips · "+STATUS.filter(function(r){return r.clips.length;}).length+" sources";
+    if(!spinning && !player.classList.contains("open")) idle();
+  }
+}
+
 /* ---------------- marquee bulbs ---------------- */
 (function(){
   [$("bulbT"),$("bulbB")].forEach(function(rail,r){
@@ -462,8 +560,10 @@ function buildStrip(targetIdx){
   for(i=0;i<total;i++){
     var c=CLIPS[i%n],cell=document.createElement("div");
     cell.className="cell";
-    var t=document.createElement("div"); t.className="t"; t.textContent=c.title;
-    var m=document.createElement("div"); m.className="m"; m.textContent=c.topic||KINDS[kindOf(c).kind].label;
+    var t=document.createElement("div"); t.className="t";
+    var m=document.createElement("div"); m.className="m";
+    if(c.untitled){ t.className="t q"; t.textContent="?"; m.textContent="CLIP "+("0"+c.id).slice(-2); }
+    else { t.textContent=c.title; m.textContent=c.topic||KINDS[kindOf(c).kind].label; }
     cell.appendChild(t); cell.appendChild(m); frag.appendChild(cell);
   }
   strip.innerHTML=""; strip.appendChild(frag);
@@ -511,7 +611,7 @@ function spin(){
    RENDERERS
    ===================================================================== */
 function clearMedia(){
-  clearTimeout(loadTimer);
+  clearTimeout(loadTimer); clearTimeout(deadTimer);
   if(msgHook){ window.removeEventListener("message",msgHook); msgHook=null; }
   var m=shell.querySelectorAll("iframe,video"),i;
   for(i=0;i<m.length;i++){ try{ m[i].pause&&m[i].pause(); }catch(e){} m[i].removeAttribute("src"); m[i].remove(); }
@@ -540,6 +640,18 @@ var RENDER={
   instagram:function(clip,info){
     shell.classList.add("ig");
     var f=mkFrame(bust("https://www.instagram.com/reel/"+info.id+"/embed/"));
+    // second layer of the guard: if this reel never reports MOUNTED it is gone,
+    // so roll again instead of showing Instagram's error card to the room
+    var mounted=false;
+    msgHook=function(e){
+      if(!f.contentWindow||e.source!==f.contentWindow) return;
+      var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(x){ return; } }
+      if(d&&(d.type==="MOUNTED"||(d.type==="MEASURE"&&d.details&&d.details.height>420))) mounted=true;
+    };
+    window.addEventListener("message",msgHook);
+    deadTimer=setTimeout(function(){
+      if(!mounted && shell.contains(f)) rerollPastDead(info.id);
+    },PLAY_MS);
     // Instagram wraps the whole media area in <a target="_blank">, so a click on a
     // finished clip jumps to instagram.com. No allow-popups / allow-top-navigation
     // in the sandbox makes every one of those links inert; playback is untouched.
@@ -641,11 +753,27 @@ function mount(clip){
   shell.title = pNote.textContent;
   requestAnimationFrame(syncWidth);
 }
+/* a dead reel never reaches the room: mark it, drop it, and quietly play another */
+function rerollPastDead(id){
+  if(id){ guard.dead[id]=1; guardSave(); }
+  var wasCurrent=current;
+  dropDead();
+  if(++rerolls>6 || !CLIPS.length){
+    showError("Could not reach this clip",
+      "It looks like it was removed. " + (CLIPS.length ? "Close and spin again." :
+      "Every clip in the list came back empty - check links.txt."));
+    return;
+  }
+  var pick=CLIPS[randInt(CLIPS.length)];
+  if(CLIPS.length>1){ var n=0; while(pick===wasCurrent && n++<8) pick=CLIPS[randInt(CLIPS.length)]; }
+  openPlayer(pick);
+}
+
 function openPlayer(clip){
   if(!clip) return;
   current=clip;
   pTopic.textContent=clip.topic||"";
-  pTitle.textContent=clip.title||"";
+  pTitle.textContent=clip.untitled ? ("Clip "+("0"+clip.id).slice(-2)) : (clip.title||"");
   pCreator.textContent=clip.creator?("by "+clip.creator):"";
   var link=clip.link||clip.url||srcOf(clip);
   openBtn.hidden = kindOf(clip).kind==="file" || !/^https?:/i.test(String(link));
@@ -655,6 +783,7 @@ function openPlayer(clip){
   closeBtn.focus();
 }
 function closePlayer(){
+  rerolls=0;
   if(document.fullscreenElement){ try{document.exitFullscreen();}catch(e){} }
   player.classList.remove("open");
   clearMedia();
@@ -754,7 +883,10 @@ function niceTitle(name){
   return t||name;
 }
 function tagClips(list,s){
-  return (list||[]).filter(function(c){ return c && srcOf(c) && c.disabled!==true; })
+  return (list||[])
+    // an entry can be a bare URL string - "https://..." - or a full object
+    .map(function(c){ return typeof c==="string" ? {src:c.trim()} : c; })
+    .filter(function(c){ return c && srcOf(c) && c.disabled!==true && !/^\s*(#|\/\/)/.test(srcOf(c)); })
     .map(function(c){
       var o={},k; for(k in c) o[k]=c[k];
       if(!o.topic && s.topic) o.topic=s.topic;
@@ -840,6 +972,20 @@ function loadDrive(s){
     });
 }
 
+/* -- links.txt: one URL per line, blank lines and # comments ignored ------ */
+function loadLinks(s){
+  var url=s.file||s.url||"links.txt";
+  if(PAGE_IS_LOCAL) return Promise.reject(new Error("a page opened from disk cannot read <code>"+esc(url)+"</code>; use start.bat"));
+  return fetch(toUrl(url),{cache:"no-store"})
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.text(); })
+    .then(function(txt){
+      var lines=txt.split(/\r?\n/).map(function(l){ return l.trim(); })
+                   .filter(function(l){ return l && l.charAt(0)!=="#" && l.slice(0,2)!=="//"; });
+      if(!lines.length) throw new Error("<code>"+esc(url)+"</code> has no links in it");
+      return { clips:tagClips(lines,s), msg:lines.length+" link(s) from <code>"+esc(url)+"</code>" };
+    });
+}
+
 function loadJsonSource(s,depth){
   if(depth>3) return Promise.reject(new Error("nested too deep"));
   return fetch(toUrl(s.url),{cache:"no-store"})
@@ -880,6 +1026,7 @@ function resolveOne(s,depth){
     if(t==="clips")            p=Promise.resolve({clips:tagClips(s.clips,s),msg:tagClips(s.clips,s).length+" clip(s) listed in clips.json"});
     else if(t==="folder")      p=loadFolder(s);
     else if(t==="gdrivefolder")p=loadDrive(s);
+    else if(t==="links")       p=loadLinks(s);
     else if(t==="json")        p=loadJsonSource(s,depth||0);
     else p=Promise.reject(new Error('unknown source type "'+esc(t)+'"'));
   }catch(e){ p=Promise.reject(e); }
@@ -913,7 +1060,7 @@ function renderPanel(label){
 
 /* ---------------- boot ---------------- */
 function start(clips,label){
-  CLIPS=clips.map(function(c,i){ if(!c.id) c.id=i+1; if(!c.title) c.title="Clip "+(i+1); return c; });
+  CLIPS=clips.map(function(c,i){ c.id=i+1; if(!c.title){ c.title=""; c.untitled=true; } return c; });
   SOURCE=label;
   renderPanel(label);
   var bad=STATUS.filter(function(r){ return r.error; }).length;
@@ -928,6 +1075,7 @@ function start(clips,label){
   srcTxt.textContent=CLIPS.length+" clips · "+STATUS.filter(function(r){return r.clips.length;}).length+" sources";
   if(bad) toast(bad+" source(s) failed to load - click the chip at the top right to see why.",8000);
   idle(); syncFS();
+  backgroundVerify();
 }
 function loadDoc(doc,label){
   applyBranding(doc&&doc.meta);

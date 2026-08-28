@@ -60,19 +60,22 @@ https://<you>.github.io/clips/?clips=acc302.json
 
 ## Changing the clip list
 
-You never need this folder on your PC again. Open `clips.json` **on GitHub**, press the
+You never need this folder on your PC again. Open **`links.txt`** on GitHub, press the
 pencil, edit, commit. Refresh the page and the new list is live.
 
-The list lives in the source named `"Class clip list"`. Each clip needs a `title` and
-one `src` — the player works out what kind of link it is:
+It is just URLs, one per line:
 
-```json
-{ "title": "How to Read a Balance Sheet", "creator": "Brian Feroldi",
-  "topic": "Financial Statements",
-  "src": "https://www.instagram.com/reel/C5waK5hCueF/" }
+```
+https://www.instagram.com/reel/DV-g3wmDaLe/
+https://youtu.be/dQw4w9WgXcQ
+# https://www.instagram.com/reel/PARKED/     <- ignored, kept for later
 ```
 
-| Put this in `src` | Starts by itself | Knows when it ended |
+Add a line, delete a line. That is the whole job. Numbering is automatic and no title
+is needed — an untitled clip shows as **?** on the reel, which keeps the surprise.
+The list is kept best-first, so the top of the file is the strongest material.
+
+| Put this on a line | Starts by itself | Knows when it ended |
 |---|---|---|
 | `https://youtu.be/ID` — YouTube, Shorts included | **yes** | **yes** |
 | `https://vimeo.com/123456789` | **yes** | **yes** |
@@ -85,10 +88,30 @@ nothing on the page can press play for them or be told when they finish. **Anyth
 want to start on its own has to be YouTube, Vimeo, or a direct video URL.** That is a
 limit of those two services, not of this page.
 
-Optional per clip: `"kind"` forces a renderer, `"link"` sets where the ↗ button goes,
-`"disabled": true` parks an entry without deleting it.
+### Dead links take care of themselves
 
----
+Instagram posts disappear. The page handles that on its own — you only ever open the
+link.
+
+Instagram's embed script reports back to the page: a reel that still exists sends
+`LOADING → MEASURE → MOUNTED`, one that has been deleted sends `LOADING` and then
+nothing. That is the whole test, and it needs no server, no API and no key.
+
+- **On load**, every Instagram link is checked in a hidden frame, three at a time, and
+  dead ones leave the pool before you ever press spin. The result is cached for the day,
+  so this happens once — a reload is instant.
+- **While playing**, if a dead one slips through anyway, the player notices within five
+  seconds and rolls again by itself. Nothing appears on screen; the class sees the next
+  clip, not an error.
+
+You can still sweep the file by hand before uploading — double-click
+**`build-for-github.bat`** and it comments out anything that has died:
+
+```
+# DEAD 2026-08-28 gone  https://www.instagram.com/reel/XXXX/
+```
+
+That keeps `links.txt` tidy, but it is optional. The page copes either way.
 
 ## Sources — where the page is allowed to look
 
