@@ -146,3 +146,39 @@ that happens the page says so on screen rather than failing quietly.
 ## Keyboard
 
 `Space` spin · `R` replay · `F` fullscreen · `Esc` close
+
+---
+
+## The list is YouTube now (28 Aug 2026)
+
+It used to be 388 Instagram reels. It is now **200 clips from the official
+`@FamilyGuyFOX` channel**, harvested from that channel's own playlists.
+
+Instagram's embed was the cause of nearly every problem this project had, and none
+of them were fixable:
+
+| what was wanted | Instagram | YouTube |
+|---|---|---|
+| starts on its own | no | yes |
+| a scrub bar | no API at all | built from the API's position updates |
+| knows when the clip ended | never reports it | reports it exactly |
+| replay button in the middle | its own one is a dead link | ours, and it works |
+| says when a link is gone | silence, same as a slow link | an explicit error code |
+| checking the whole list | needs a real browser, gets throttled | one request per video |
+| throttles you for using it | yes | no |
+
+Measured on 30 of these clips through a real Chrome, in a page like this one:
+**30 of 30 played, 0 served an advert.** Every one of the 237 candidates was public,
+embeddable and not age-restricted — the Instagram list never managed that.
+
+The old Instagram list has not been thrown away: it is in `links-instagram.txt`, and
+`clips.json` explains how to switch back to it.
+
+### Refreshing the list
+
+Everything lives in the working folder, not in this repo:
+
+```
+YouTube\refresh.bat      re-read the channel and rewrite links.txt
+YouTube\ad-check.bat     watch 25 clips in a real browser and count adverts
+```

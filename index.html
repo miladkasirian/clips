@@ -187,6 +187,32 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 .btn.primary:hover{box-shadow:0 18px 40px -12px rgba(49,224,192,.9)}
 .btn.ghost{flex:none;width:52px}
 .btn[hidden]{display:none}
+/* ---------- our own transport ----------
+   YouTube serves these embeds with ytp-hide-controls: no play button, no scrub
+   bar, nothing. Verified across every embed parameter, both domains, short and
+   long videos, and with and without Chrome's autoplay flags - it is simply the
+   player YouTube gives an embedder now. The upside is a completely clean frame
+   with no branding or suggested videos; the downside is that there is no way to
+   pause or seek at all. So the page builds its own out of the position updates
+   the iframe API already sends. */
+.transport{display:flex;align-items:center;gap:12px;width:var(--w);min-width:260px;
+  padding:0 6px;height:34px}
+.transport[hidden]{display:none}
+.tbtn{flex:none;width:38px;height:34px;border-radius:11px;cursor:pointer;display:grid;place-items:center;
+  border:1px solid var(--line-2);background:rgba(255,255,255,.055);color:var(--txt);transition:.16s ease}
+.tbtn:hover{background:rgba(255,255,255,.12)}
+.tbtn svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.1;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.tbtn.fill svg{fill:currentColor;stroke:none}
+.ttime{flex:none;font-family:var(--mono);font-size:11.5px;color:var(--txt-dim);letter-spacing:.4px;
+  min-width:38px;text-align:center}
+.track{flex:1;height:22px;display:flex;align-items:center;cursor:pointer;touch-action:none}
+.track .rail{position:relative;width:100%;height:5px;border-radius:99px;background:rgba(255,255,255,.13)}
+.track .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%}
+.track .knob{position:absolute;top:50%;width:13px;height:13px;border-radius:50%;background:#fff;
+  transform:translate(-50%,-50%) scale(0);left:0;transition:transform .15s ease;
+  box-shadow:0 2px 8px rgba(0,0,0,.6)}
+.track:hover .knob,.track.dragging .knob{transform:translate(-50%,-50%) scale(1)}
 .p-note{text-align:center;font-size:11.5px;color:var(--txt-faint);letter-spacing:.2px;padding:0 6px;width:var(--w);min-width:260px}
 
 /* ---------- manual picker ----------
@@ -349,6 +375,22 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
       <button class="btn ghost" id="againBtn" type="button" title="Close and spin again">
         <svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M20 9A8 8 0 0 0 6.3 5.3L4 8"/><path d="M4 15a8 8 0 0 0 13.7 3.7L20 16"/></svg>
       </button>
+    </div>
+    <div class="transport" id="transport" hidden>
+      <button class="tbtn fill" id="ppBtn" type="button" title="Play / pause (space)" aria-label="Play or pause">
+        <svg id="ppIcon" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+      </button>
+      <button class="tbtn" id="backBtn" type="button" title="Back 10 seconds (left arrow)" aria-label="Back ten seconds">
+        <svg viewBox="0 0 24 24"><path d="M11 5L4 12l7 7"/><path d="M20 5l-7 7 7 7"/></svg>
+      </button>
+      <button class="tbtn" id="fwdBtn" type="button" title="Forward 10 seconds (right arrow)" aria-label="Forward ten seconds">
+        <svg viewBox="0 0 24 24"><path d="M13 5l7 7-7 7"/><path d="M4 5l7 7-7 7"/></svg>
+      </button>
+      <span class="ttime" id="tNow">0:00</span>
+      <div class="track" id="track" role="slider" aria-label="Seek" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="rail"><div class="fill" id="tFill"></div><div class="knob" id="tKnob"></div></div>
+      </div>
+      <span class="ttime" id="tEnd">0:00</span>
     </div>
     <p class="p-note" id="pNote" hidden></p>
   </div>
@@ -769,7 +811,9 @@ var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),c
     player=$("player"),wrap=$("wrap"),shell=$("shell"),loading=$("loading"),endcard=$("endcard"),igReplay=$("igReplay"),
     errcard=$("errcard"),errH=$("errH"),errD=$("errD"),
     pTopic=$("pTopic"),pKind=$("pKind"),pTitle=$("pTitle"),pCreator=$("pCreator"),pNote=$("pNote"),
-    replayBtn=$("replayBtn"),endReplay=$("endReplay"),fsBtn=$("fsBtn"),fsTxt=$("fsTxt"),fsIcon=$("fsIcon"),
+    replayBtn=$("replayBtn"),endReplay=$("endReplay"),
+    transport=$("transport"),ppBtn=$("ppBtn"),ppIcon=$("ppIcon"),backBtn=$("backBtn"),fwdBtn=$("fwdBtn"),
+    tNow=$("tNow"),tEnd=$("tEnd"),track=$("track"),tFill=$("tFill"),tKnob=$("tKnob"),fsBtn=$("fsBtn"),fsTxt=$("fsTxt"),fsIcon=$("fsIcon"),
     openBtn=$("openBtn"),againBtn=$("againBtn"),closeBtn=$("closeBtn"),
     srcChip=$("srcChip"),srcTxt=$("srcTxt"),sndChip=$("sndChip"),fileIn=$("fileIn"),toastEl=$("toast"),
     panel=$("panel"),panelBody=$("panelBody"),
@@ -777,6 +821,7 @@ var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),c
 
 var CLIPS=[],SOURCE="built-in copy",spinning=false,current=null,loadTimer=null,msgHook=null,deadTimer=null,rerolls=0;
 var focusHook=null,armTimer=null;   // watches for the click that lands inside the embed
+var ytCmd=null;            // set while a YouTube player is mounted
 var retriedOnce=false;     // one silent rebuild per clip, never a different clip
 var PAGE_IS_LOCAL = location.protocol === "file:";
 
@@ -990,6 +1035,100 @@ function spin(){
 }
 
 /* =====================================================================
+   TRANSPORT  -  our own play/pause, skip and scrub bar
+   ---------------------------------------------------------------------
+   Driven by whatever the current renderer can answer. YouTube reports its
+   position continuously through the same infoDelivery messages the page is
+   already listening to, so this costs no extra requests. A <video> element is
+   read directly. Anything that can answer neither (Instagram, Drive) leaves the
+   bar hidden rather than showing a scrub bar that does nothing.
+   ===================================================================== */
+var TR = {
+  on:false, dur:0, pos:0, playing:false, drag:false, tick:null,
+  seek:null, play:null, pause:null,          // filled in by the renderer
+
+  enable:function(o){
+    this.on=true; this.seek=o.seek; this.play=o.play; this.pause=o.pause;
+    this.dur=o.dur||0; this.pos=0; this.playing=false;
+    transport.hidden=false; this.paint();
+    var self=this;
+    clearInterval(this.tick);
+    // a local <video> has no message channel, so poll it; YouTube pushes to us
+    if(o.poll) this.tick=setInterval(function(){ var r=o.poll(); if(r){ self.set(r.pos,r.dur,r.playing); } },250);
+  },
+  disable:function(){
+    this.on=false; this.seek=this.play=this.pause=null;
+    clearInterval(this.tick); this.tick=null;
+    this.dur=this.pos=0; this.playing=false;
+    transport.hidden=true; track.classList.remove("dragging");
+  },
+  set:function(pos,dur,playing){
+    if(!this.on) return;
+    if(typeof dur==="number" && dur>0) this.dur=dur;
+    if(typeof playing==="boolean") this.playing=playing;
+    if(typeof pos==="number" && !this.drag) this.pos=pos;
+    this.paint();
+  },
+  paint:function(){
+    var d=this.dur||0, p=Math.max(0,Math.min(this.pos||0,d)),
+        pct = d>0 ? (p/d*100) : 0;
+    tFill.style.width=pct+"%"; tKnob.style.left=pct+"%";
+    tNow.textContent=clock(p); tEnd.textContent=clock(d);
+    track.setAttribute("aria-valuenow", Math.round(pct));
+    ppIcon.innerHTML = this.playing
+      ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
+      : '<path d="M7 4l12 8-12 8z"/>';
+    ppBtn.title = this.playing ? "Pause (space)" : "Play (space)";
+  },
+  toggle:function(){
+    if(!this.on) return;
+    if(this.playing){ this.pause&&this.pause(); this.playing=false; }
+    else            { this.play &&this.play();  this.playing=true;  }
+    this.paint();
+  },
+  nudge:function(by){
+    if(!this.on||!this.seek) return;
+    var t=Math.max(0,Math.min((this.pos||0)+by, this.dur||1e9));
+    this.pos=t; this.seek(t); this.paint();
+  }
+};
+function clock(sec){
+  sec=Math.max(0,Math.round(sec||0));
+  var m=Math.floor(sec/60), s=sec%60;
+  return m+":"+(s<10?"0":"")+s;
+}
+(function(){
+  function frac(ev){
+    var r=track.getBoundingClientRect(), x=(ev.touches?ev.touches[0].clientX:ev.clientX)-r.left;
+    return Math.max(0,Math.min(1, r.width ? x/r.width : 0));
+  }
+  function apply(ev){
+    if(!TR.on||!TR.dur) return;
+    TR.pos=frac(ev)*TR.dur; TR.paint();
+  }
+  function down(ev){
+    if(!TR.on||!TR.dur) return;
+    TR.drag=true; track.classList.add("dragging"); apply(ev); ev.preventDefault();
+  }
+  function move(ev){ if(TR.drag) apply(ev); }
+  function up(ev){
+    if(!TR.drag) return;
+    TR.drag=false; track.classList.remove("dragging");
+    if(TR.seek) TR.seek(TR.pos);
+  }
+  track.addEventListener("mousedown",down);   track.addEventListener("touchstart",down,{passive:false});
+  window.addEventListener("mousemove",move);  window.addEventListener("touchmove",move,{passive:false});
+  window.addEventListener("mouseup",up);      window.addEventListener("touchend",up);
+  track.addEventListener("keydown",function(e){
+    if(e.key==="ArrowLeft"){ e.preventDefault(); TR.nudge(-5); }
+    if(e.key==="ArrowRight"){ e.preventDefault(); TR.nudge(5); }
+  });
+  ppBtn.addEventListener("click",function(){ TR.toggle(); });
+  backBtn.addEventListener("click",function(){ TR.nudge(-10); });
+  fwdBtn.addEventListener("click",function(){ TR.nudge(10); });
+})();
+
+/* =====================================================================
    RENDERERS
    ===================================================================== */
 function clearMedia(){
@@ -997,7 +1136,7 @@ function clearMedia(){
   loading.innerHTML='<div class="spinner"></div>';
   if(msgHook){ window.removeEventListener("message",msgHook); msgHook=null; }
   if(focusHook){ window.removeEventListener("blur",focusHook); focusHook=null; }
-  clearTimeout(armTimer);
+  clearTimeout(armTimer); ytCmd=null; TR.disable();
   igReplay.classList.remove("armed");
   var m=shell.querySelectorAll("iframe,video"),i;
   for(i=0;i<m.length;i++){ try{ m[i].pause&&m[i].pause(); }catch(e){} m[i].removeAttribute("src"); m[i].remove(); }
@@ -1088,28 +1227,110 @@ var RENDER={
   },
 
   youtube:function(clip,info){
+    // origin= is only legal for a real origin. Opened by double-clicking the file,
+    // location.origin is the string "null" and sending that breaks the JS API
+    // outright, which is how a working clip turns into a frozen black box.
+    var org = /^https?:$/.test(location.protocol) ? "&origin="+encodeURIComponent(location.origin) : "";
     var src="https://www.youtube-nocookie.com/embed/"+info.id+
-      "?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&origin="+encodeURIComponent(location.origin);
+      "?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3"+
+      "&cc_load_policy=0&fs=1&color=white&enablejsapi=1&widget_referrer="+
+      encodeURIComponent(location.href)+org;
     var f=mkFrame(src);
+    // Same reasoning as the Instagram frame: YouTube wraps its title, channel avatar
+    // and end screen in links to youtube.com. Without allow-popups and
+    // allow-top-navigation every one of them is inert, and the player itself only
+    // needs scripts and same-origin to keep talking to this page.
+    f.setAttribute("sandbox","allow-scripts allow-same-origin allow-presentation");
     shell.appendChild(f);
+
+    var ready=false, started=false, retriedPlay=false;
+    function cmd(fn,args){
+      try{ f.contentWindow.postMessage(JSON.stringify(
+        {event:"command",func:fn,args:args||[],id:1,channel:"widget"}),"*"); }catch(err){}
+    }
+    ytCmd=cmd;   // so Replay can seek instead of rebuilding the whole player
+
     // YouTube's iframe speaks a small postMessage protocol; asking to listen for
     // onStateChange gives a real "ended" signal (state 0) without loading their SDK.
+    // -1 unstarted  0 ended  1 playing  2 paused  3 buffering  5 cued
     msgHook=function(e){
       if(!/youtube(-nocookie)?\.com$/.test((e.origin||"").replace(/^https?:\/\//,""))) return;
       var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(err){ return; } }
-      if(!d||d.event!=="onStateChange"&&d.event!=="infoDelivery") return;
+      if(!d) return;
+
+      if(d.event==="onReady"||d.event==="initialDelivery"){
+        ready=true; cmd("playVideo");
+        TR.enable({ seek:function(t){ cmd("seekTo",[t,true]); cmd("playVideo"); },
+                    play:function(){ cmd("playVideo"); },
+                    pause:function(){ cmd("pauseVideo"); } });
+      }
+
+      // position and length arrive continuously in infoDelivery once we are
+      // listening, so the scrub bar costs nothing extra
+      if(d.info && (d.info.currentTime!==undefined || d.info.duration!==undefined)){
+        if(!TR.on) TR.enable({ seek:function(t){ cmd("seekTo",[t,true]); cmd("playVideo"); },
+                               play:function(){ cmd("playVideo"); },
+                               pause:function(){ cmd("pauseVideo"); } });
+        TR.set(d.info.currentTime, d.info.duration, undefined);
+      }
+
+      // Unlike Instagram this is an authoritative answer, not a guess: 2 = bad id,
+      // 5 = HTML5 error, 100 = removed or private, 101/150 = the uploader turned
+      // embedding off. Worth naming, because those need a different fix each.
+      if(d.event==="onError"){
+        var c=d.info, why = (c===101||c===150) ? "the uploader does not allow it to be played outside YouTube"
+                          : (c===100)          ? "it has been removed or made private"
+                          : (c===2)            ? "the link is malformed"
+                                               : "YouTube reported an error playing it";
+        clearTimeout(deadTimer);
+        showError("Clip "+pad(current.id)+" will not play here",
+          "YouTube says "+why+" (code "+c+").<br><br>Take this line out of <code>links.txt</code> - "+
+          "<b>tools\\yt-harvest.py --probe</b> normally catches these before they get in.");
+        return;
+      }
+
       var st = d.event==="onStateChange" ? d.info : (d.info&&d.info.playerState);
+      if(st===undefined||st===null) return;
+      if(st===1||st===3){ started=true; clearTimeout(deadTimer); loading.classList.add("gone"); }
       if(st===0) endcard.classList.add("show");
       if(st===1) endcard.classList.remove("show");
+      TR.set(undefined, undefined, st===1||st===3);
     };
     window.addEventListener("message",msgHook);
+
     f.addEventListener("load",function(){
       try{
         f.contentWindow.postMessage(JSON.stringify({event:"listening",id:1,channel:"widget"}),"*");
-        f.contentWindow.postMessage(JSON.stringify({event:"command",func:"addEventListener",args:["onStateChange"],id:1,channel:"widget"}),"*");
       }catch(err){}
+      cmd("addEventListener",["onStateChange"]);
+      cmd("addEventListener",["onError"]);
+      cmd("playVideo");
     });
-    return "YouTube embed. Starts on its own, plays once, and tells this page when it ends.";
+
+    // A browser that refuses sound-on autoplay leaves the player sitting on the
+    // poster frame. Ask once more, then fall back to muted rather than to a
+    // still image nobody knows to click.
+    setTimeout(function(){
+      if(started||!shell.contains(f)) return;
+      cmd("playVideo"); retriedPlay=true;
+      setTimeout(function(){
+        if(started||!shell.contains(f)) return;
+        cmd("mute"); cmd("playVideo");
+        toast("Your browser blocked sound on autoplay - press the speaker in the player to unmute.");
+      },2500);
+    },3000);
+
+    // Same rule as everywhere else: silence is not death, so give it a second
+    // build of the SAME clip before saying anything out loud.
+    deadTimer=setTimeout(function(){
+      if(started||!shell.contains(f)) return;
+      if(!retriedOnce){ retriedOnce=true; mount(current); return; }
+      showError("Clip "+pad(current.id)+" is not coming up",
+        "The player stayed silent twice, which is nearly always the connection rather than the clip itself."+
+        "<br><br>Press <b>Replay</b> to try again, or the <b>spin</b> button for a different clip.");
+    },PLAY_MS);
+
+    return "YouTube embed, click-through disabled. Starts on its own, has a real scrub bar, and tells this page the moment it ends.";
   },
 
   vimeo:function(clip,info){
@@ -1143,7 +1364,16 @@ var RENDER={
     }
     var v=document.createElement("video");
     v.setAttribute("playsinline",""); v.controls=true; v.loop=false; v.preload="metadata"; v.autoplay=true;
-    v.addEventListener("loadedmetadata",function(){ setRatio(v.videoWidth,v.videoHeight); });
+    v.addEventListener("loadedmetadata",function(){
+      setRatio(v.videoWidth,v.videoHeight);
+      // the element has its own controls, but the same bar keeps every clip
+      // behaving identically whatever it is playing from
+      TR.enable({ seek:function(t){ v.currentTime=t; },
+                  play:function(){ v.play().catch(function(){}); },
+                  pause:function(){ v.pause(); },
+                  dur:v.duration,
+                  poll:function(){ return {pos:v.currentTime, dur:v.duration, playing:!v.paused}; } });
+    });
     v.addEventListener("loadeddata",function(){
       loading.classList.add("gone");
       // the SPIN click already gave this document user activation, so sound is allowed;
@@ -1204,6 +1434,11 @@ function closePlayer(){
 function replay(){
   var v=shell.querySelector("video");
   if(v && !v.error){ endcard.classList.remove("show"); v.currentTime=0; v.play().catch(function(){}); return; }
+  // YouTube can simply be rewound - far faster than throwing the player away and
+  // waiting for a fresh one, and it keeps the buffered video.
+  if(ytCmd && !errcard.classList.contains("show")){
+    endcard.classList.remove("show"); ytCmd("seekTo",[0,true]); ytCmd("playVideo"); return;
+  }
   if(current) mount(current);
 }
 function toggleFS(){
@@ -1322,6 +1557,12 @@ document.addEventListener("keydown",function(e){
   if(player.classList.contains("open")){
     if(e.key==="f"||e.key==="F"){ e.preventDefault(); toggleFS(); }
     if(e.key==="r"||e.key==="R"){ e.preventDefault(); replay(); }
+    // space toggles playback rather than pressing whichever button happens to
+    // hold focus - the close button has it by default, and space closing the
+    // player mid-clip is not what anyone reaching for space wants
+    if(e.key===" "&&TR.on&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName||"")){ e.preventDefault(); TR.toggle(); }
+    if(e.key==="ArrowLeft" &&TR.on){ e.preventDefault(); TR.nudge(-10); }
+    if(e.key==="ArrowRight"&&TR.on){ e.preventDefault(); TR.nudge(10); }
     return;
   }
   if(e.key===" "||e.key==="Enter"){

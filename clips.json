@@ -7,30 +7,24 @@
     "brandingNote": "Labels only. appName is the name top-left and the browser tab. badge is the little square (an emoji or up to 4 characters). Add \"course\" and \"courseName\" if you ever want a line under the name and the course code in the tab - leave them out and neither appears. \"subtitle\" adds a line under the big heading. One deployment can serve several classes: keep acc302.json beside index.html and open ?clips=acc302.json",
     "_": "---- the rest is documentation, not settings ----",
     "schemaVersion": 3,
+    "source": "Official @FamilyGuyFOX YouTube channel, playlists only",
     "verified": "2026-08-28",
+    "whyYouTube": [
+      "Instagram's embed has no JavaScript API at all: it cannot autoplay, cannot seek, never says when a clip ends, and its own end-card play button is a link to instagram.com that has to be blocked.",
+      "It also throttles a browser that opens many embeds, and a throttled frame is indistinguishable from a deleted post - which is what made the on-screen count drift.",
+      "YouTube's iframe API gives all of it properly: autoplay, a real scrub bar, a true 'ended' event, and an explicit error code when a video is gone or not embeddable.",
+      "The one cost is advertising. Family Guy is Content-ID claimed by Fox, so some of these may serve a pre-roll. tools/ad-check.py measures it per video rather than guessing."
+    ],
     "howToEdit": [
       "The clip list lives in links.txt - one URL per line. Add a line, delete a line. That is the whole job.",
-      "Order matters: the list is kept best-first, so the top of the file is the strongest material.",
+      "Order matters: the list is kept best-first (most watched first), so the top of the file is the strongest material.",
       "A line starting with # is ignored, so you can park a link without losing it.",
       "Numbering is automatic and no title is needed; an untitled clip shows as \"?\" on the reel, which keeps the surprise.",
-      "Any of these work as a line: an Instagram reel, a YouTube or Shorts link, a Vimeo link, a direct .mp4 URL, or videos/file.mp4 in this repo.",
-      "Run check-links.bat before uploading - it comments out anything that has died so it never reaches the page."
-    ],
-    "builtBy": "sync-clips.py --github",
-    "note": "Served over https from GitHub Pages. Every src must be a public link or a file committed inside this folder - a page on the web cannot read files on your PC."
+      "To refresh the harvest: tools\\yt-harvest.py --scan --probe --build",
+      "Any link type still works if you want to mix: YouTube, Shorts, Vimeo, Instagram, a direct .mp4, or videos/file.mp4 in this repo."
+    ]
   },
   "sources": [
-    {
-      "id": "core",
-      "type": "clips",
-      "name": "Example (off)",
-      "enabled": false,
-      "note": "Off. The real list lives in links.txt. These two rows are only here to show the shape if you ever want links inside this file instead.",
-      "clips": [
-        "https://www.instagram.com/reel/PUT_A_CODE_HERE/",
-        "https://youtu.be/PUT_AN_ID_HERE"
-      ]
-    },
     {
       "id": "links-file",
       "type": "links",
@@ -40,6 +34,25 @@
       "note": "This is the live list. Open links.txt, one URL per line, add or remove lines. Nothing else to fill in - numbering is automatic and no title is needed."
     },
     {
+      "id": "instagram-fallback",
+      "type": "json",
+      "name": "The old Instagram list",
+      "enabled": false,
+      "url": "links-instagram.txt",
+      "note": "Off. The 388 Instagram reels are kept in links-instagram.txt so nothing was thrown away. To go back, set this source's type to \"links\", its file to \"links-instagram.txt\", enable it, and disable links-file above."
+    },
+    {
+      "id": "core",
+      "type": "clips",
+      "name": "Example (off)",
+      "enabled": false,
+      "note": "Off. The real list lives in links.txt. These two rows are only here to show the shape if you ever want links inside this file instead.",
+      "clips": [
+        "https://www.youtube.com/watch?v=PUT_AN_ID_HERE",
+        "https://youtu.be/PUT_AN_ID_HERE"
+      ]
+    },
+    {
       "id": "local-videos",
       "type": "folder",
       "name": "Video files in this repo",
@@ -47,17 +60,7 @@
       "path": "videos/",
       "topic": "Local clip",
       "manifest": [],
-      "note": "Off, because the list is all links. If you ever commit video files into videos/, set enabled to true and put their filenames in 'manifest' (sync-clips.bat does that for you locally). A folder listing cannot be read on GitHub Pages, which is what 'manifest' is for."
-    },
-    {
-      "id": "drive",
-      "type": "gdriveFolder",
-      "name": "Shared Google Drive folder",
-      "enabled": false,
-      "folder": "https://drive.google.com/drive/folders/12idEFJghPR7AlzAomrl0Eg82lHRcCX2Y",
-      "apiKey": "",
-      "topic": "Drive clip",
-      "note": "Off, and not needed while everything is links. To switch it on you need a free Google API key: console.cloud.google.com -> new project -> enable 'Google Drive API' -> Credentials -> API key -> paste it into apiKey above. Google refuses to list a folder to an anonymous caller, so there is no key-free way. The folder must stay shared as 'Anyone with the link'. Note the key sits in this file in a public repo, so restrict it to the Drive API and to your GitHub Pages domain."
+      "note": "Off, because the list is all links. If you ever commit video files into videos/, set enabled to true and put their filenames in 'manifest'. A folder listing cannot be read on GitHub Pages, which is what 'manifest' is for."
     },
     {
       "id": "extra",
