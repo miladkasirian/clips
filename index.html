@@ -475,7 +475,7 @@ function syncWidth(){
      2. if a dead one slips through anyway, the player notices within a few
         seconds and rolls again by itself. Nothing shows on screen.
    ===================================================================== */
-var GUARD_KEY="clipGuard.v1", GUARD_TTL_DAYS=1, PROBE_MS=7000, PLAY_MS=5000;
+var GUARD_KEY="clipGuard.v2", GUARD_TTL_DAYS=1, PROBE_MS=11000, PLAY_MS=6000;
 var guard={day:"",dead:{},ok:{}};
 
 function today(){ return new Date().toISOString().slice(0,10); }
@@ -491,25 +491,32 @@ function guardLoad(){
 function guardSave(){ try{ guard.day=today(); localStorage.setItem(GUARD_KEY,JSON.stringify(guard)); }catch(e){} }
 
 /* loads one Instagram embed out of sight and waits for its MOUNTED ping */
+/* Resolves "dead", "ok", or "unknown".
+   The difference matters: a deleted reel sends LOADING and then goes quiet, while a
+   slow or offline network sends nothing at all. Treating silence as death was wrong -
+   it threw four healthy clips out of the pool on a cold connection. Only LOADING with
+   no MOUNTED behind it condemns a link. */
 function probeInstagram(id){
   return new Promise(function(resolve){
-    var f=document.createElement("iframe"), done=false, timer;
+    var f=document.createElement("iframe"), done=false, timer, sawLoading=false;
     f.setAttribute("aria-hidden","true"); f.setAttribute("tabindex","-1");
     f.style.cssText="position:fixed;left:-9999px;top:0;width:400px;height:600px;border:0;opacity:0;pointer-events:none";
     f.setAttribute("sandbox","allow-scripts allow-same-origin");
-    function finish(alive){
+    function finish(verdict){
       if(done) return; done=true;
       clearTimeout(timer); window.removeEventListener("message",onMsg);
       try{ f.removeAttribute("src"); f.remove(); }catch(e){}
-      resolve(alive);
+      resolve(verdict);
     }
     function onMsg(e){
       if(!f.contentWindow || e.source!==f.contentWindow) return;
       var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(x){ return; } }
-      if(d && (d.type==="MOUNTED" || (d.type==="MEASURE" && d.details && d.details.height>420))) finish(true);
+      if(!d) return;
+      if(d.type==="LOADING") sawLoading=true;
+      if(d.type==="MOUNTED" || (d.type==="MEASURE" && d.details && d.details.height>420)) finish("ok");
     }
     window.addEventListener("message",onMsg);
-    timer=setTimeout(function(){ finish(false); },PROBE_MS);
+    timer=setTimeout(function(){ finish(sawLoading ? "dead" : "unknown"); },PROBE_MS);
     f.src="https://www.instagram.com/reel/"+id+"/embed/captioned/";
     document.body.appendChild(f);
   });
@@ -530,11 +537,12 @@ function backgroundVerify(){
   function next(){
     if(i>=todo.length){ if(!running&&changed){ guardSave(); dropDead(); } return; }
     var item=todo[i++]; running++;
-    probeInstagram(item.id).then(function(alive){
-      (alive?guard.ok:guard.dead)[item.id]=1;
-      if(!alive) changed=true;
+    probeInstagram(item.id).then(function(v){
+      if(v==="ok")        guard.ok[item.id]=1;
+      else if(v==="dead"){ guard.dead[item.id]=1; changed=true; }
+      // "unknown" is remembered as nothing at all, so it gets another chance later
       running--;
-      if(!alive) dropDead();
+      if(v==="dead") dropDead();
       next();
     });
   }
@@ -680,15 +688,19 @@ var RENDER={
     var f=mkFrame(bust("https://www.instagram.com/reel/"+info.id+"/embed/"));
     // second layer of the guard: if this reel never reports MOUNTED it is gone,
     // so roll again instead of showing Instagram's error card to the room
-    var mounted=false;
+    var mounted=false, sawLoading=false;
     msgHook=function(e){
       if(!f.contentWindow||e.source!==f.contentWindow) return;
       var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(x){ return; } }
-      if(d&&(d.type==="MOUNTED"||(d.type==="MEASURE"&&d.details&&d.details.height>420))) mounted=true;
+      if(!d) return;
+      if(d.type==="LOADING") sawLoading=true;
+      if(d.type==="MOUNTED"||(d.type==="MEASURE"&&d.details&&d.details.height>420)) mounted=true;
     };
     window.addEventListener("message",msgHook);
     deadTimer=setTimeout(function(){
-      if(!mounted && shell.contains(f)) rerollPastDead(info.id);
+      // roll on either way so the room never stares at a blank frame, but only write it
+      // off for good when Instagram actually said the post is not there
+      if(!mounted && shell.contains(f)) rerollPastDead(sawLoading ? info.id : null);
     },PLAY_MS);
     // Instagram wraps the whole media area in <a target="_blank">, so a click on a
     // finished clip jumps to instagram.com. No allow-popups / allow-top-navigation
