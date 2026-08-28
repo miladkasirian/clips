@@ -115,7 +115,7 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
    smaller of "what the viewport allows" and "what the max width implies", then width
    follows from the aspect ratio. --w is measured back off the shell so the header and
    the control bar always match the video exactly, whatever its shape. */
-.player-wrap{--wmax:min(460px,92vw); --vchrome:172px; --arW:4; --arH:5; --w:430px;
+.player-wrap{--wmax:min(460px,92vw); --vchrome:218px; --arW:4; --arH:5; --w:430px;
   display:flex;flex-direction:column;align-items:center;gap:12px;max-height:100%;
   animation:rise .42s cubic-bezier(.2,.9,.25,1)}
 @keyframes rise{from{opacity:0;transform:translateY(26px) scale(.965)}to{opacity:1;transform:none}}
@@ -173,9 +173,9 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 .errcard code{font-family:var(--mono);font-size:11.5px;color:var(--gold);word-break:break-all}
 
 #player:fullscreen,#player:-webkit-full-screen{padding:18px;background:#04070e}
-#player:fullscreen .player-wrap,#player:-webkit-full-screen .player-wrap{--wmax:94vw;--vchrome:150px;height:100%;justify-content:center}
+#player:fullscreen .player-wrap,#player:-webkit-full-screen .player-wrap{--wmax:94vw;--vchrome:196px;height:100%;justify-content:center}
 
-.p-bar{display:flex;gap:10px;padding:0 4px;width:var(--w);min-width:260px}
+.p-bar{display:flex;gap:10px;padding:0 4px;width:min(var(--w),620px);min-width:260px}
 .btn{flex:1;height:46px;border-radius:13px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:650;letter-spacing:.2px;white-space:nowrap;
   display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:.18s ease;
   border:1px solid var(--line-2);background:rgba(255,255,255,.055);color:var(--txt)}
@@ -195,7 +195,7 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
    with no branding or suggested videos; the downside is that there is no way to
    pause or seek at all. So the page builds its own out of the position updates
    the iframe API already sends. */
-.transport{display:flex;align-items:center;gap:12px;width:var(--w);min-width:260px;
+.transport{display:flex;align-items:center;gap:12px;width:min(var(--w),620px);min-width:260px;
   padding:0 6px;height:34px}
 .transport[hidden]{display:none}
 .tbtn{flex:none;width:38px;height:34px;border-radius:11px;cursor:pointer;display:grid;place-items:center;
@@ -254,7 +254,7 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
   .brand small{display:none}
   .window{height:102px}
   .cell{height:100px}
-  .player-wrap{--vchrome:196px}
+  .player-wrap{--vchrome:242px}
   .p-bar{flex-wrap:wrap}
 }
 @media (prefers-reduced-motion:reduce){ #aurora span,.spin::after{animation:none} }
@@ -898,6 +898,10 @@ function kindOf(c){
 function setRatio(w,h){
   if(!w||!h) return;
   wrap.style.setProperty("--arW",w); wrap.style.setProperty("--arH",h);
+  // A portrait reel looks wrong stretched wide and a 16:9 clip looks lost in a
+  // narrow column, so the width cap follows the shape of what is actually
+  // playing rather than the one shape the list used to be.
+  wrap.style.setProperty("--wmax", (w/h > 1.15) ? "min(1180px,94vw)" : "min(460px,92vw)");
   requestAnimationFrame(syncWidth);
 }
 /* copy the shell's real width onto the header / control bar so they always line up */
