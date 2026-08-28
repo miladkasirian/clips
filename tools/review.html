@@ -251,7 +251,7 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
     </div>
     <div class="grid" style="margin-top:9px;grid-template-columns:1fr">
       <button class="act small" id="bExport" type="button">
-        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> <span id="bExportTxt">Export &mdash; everything except drops</span>
+        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> <span id="bExportTxt">Export / publish</span>
       </button>
     </div>
     <p class="hint">Progress saves by itself &mdash; close this and come back any time.
@@ -309,6 +309,10 @@ https://www.youtube.com/shorts/5lC8TL-BeOQ</div>
 <div class="sheet" id="sheet">
   <div class="inner">
     <h2 id="shTitle">Your new list</h2>
+    <div class="tabs">
+      <button class="tab sel" id="mKept" type="button">Kept only</button>
+      <button class="tab" id="mAll" type="button">Everything except drops</button>
+    </div>
     <p id="shLede"></p>
     <textarea id="out" readonly spellcheck="false"></textarea>
     <div class="grid">
@@ -385,7 +389,7 @@ var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$(
     bExport=$("bExport"), bReset=$("bReset"), sheet=$("sheet"), out=$("out"),
     bCopy=$("bCopy"), bDl=$("bDl"), bClose=$("bClose"), shTitle=$("shTitle"), shLede=$("shLede"), kb=$("kb"),
     live=$("live"), liveTxt=$("liveTxt"), flash=$("flash"),
-    bExportTxt=$("bExportTxt"), bPubKeepTxt=$("bPubKeepTxt"),
+    bExportTxt=$("bExportTxt"), bPubKeepTxt=$("bPubKeepTxt"), mKept=$("mKept"), mAll=$("mAll"),
     bLists=$("bLists"), bAdd=$("bAdd"), lists=$("lists"), rows=$("rows"), bListsClose=$("bListsClose"),
     tKept=$("tKept"), tDropped=$("tDropped"), tSkipped=$("tSkipped"), bPubKeep=$("bPubKeep"),
     addSheet=$("addSheet"), addIn=$("addIn"), bCheck=$("bCheck"), bAddClose=$("bAddClose"), results=$("results"),
@@ -615,8 +619,10 @@ function paintCounts(){
   bUndo.disabled = !HIST.length;
   // the count is the only thing that reliably tells the two exports apart
   var rest = ITEMS.length - c.drop;
-  bExportTxt.innerHTML  = "Export &mdash; " + rest + (rest===1?" clip":" clips") + " (all but drops)";
+  bExportTxt.innerHTML  = "Export / publish &mdash; " + c.keep + " kept";
   bPubKeepTxt.innerHTML = "Export &mdash; " + c.keep + (c.keep===1?" kept clip":" kept only");
+  mKept.textContent = "Kept only " + c.keep;
+  mAll.textContent  = "All but drops " + rest;
 }
 
 /* ---------------- transport (YouTube gives embeds no controls of their own) ---- */
@@ -1040,13 +1046,20 @@ function openSheet(keptOnly){
        ? ("You still have " + c.left + " to look at. Exporting now is fine — this is everything except the "
           + r.dropped + " you dropped, and your progress is kept.")
        : ("Everything except the " + r.dropped + " you dropped. The dropped links are commented out at the bottom, not deleted."));
+  mKept.classList.toggle("sel", !!keptOnly);
+  mAll.classList.toggle("sel", !keptOnly);
   pubMsg.textContent = ""; paintPub();
   bPublish.querySelector("span").textContent =
     (token() ? "Publish " : "Save token and publish ") + live + (live===1?" clip":" clips") + " to the site";
   sheet.classList.add("open");
 }
-bExport.addEventListener("click", function(){ openSheet(false); });
+// Kept-only is the default. This page keeps its own list in its own database and
+// touches the main site only when Publish is pressed, so what leaves here should
+// be the list actually approved - not everything that has not been rejected yet.
+bExport.addEventListener("click", function(){ openSheet(true); });
 bPubKeep.addEventListener("click", function(){ sheetShut(lists); openSheet(true); });
+mKept.addEventListener("click", function(){ openSheet(true); });
+mAll.addEventListener("click",  function(){ openSheet(false); });
 bClose.addEventListener("click", function(){ sheet.classList.remove("open"); });
 bCopy.addEventListener("click", function(){
   out.focus(); out.select(); out.setSelectionRange(0, out.value.length);
