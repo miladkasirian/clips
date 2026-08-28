@@ -1448,6 +1448,7 @@ function openPlayer(clip){
   endNote.textContent=note; endNote.hidden=true;
   endNoteBtn.hidden=!note; endNoteTxt.textContent="Show the note";
   endLede.hidden=false;
+  loadVoice(clip);
   pTopic.textContent=clip.topic||"";
   pTitle.textContent=clip.untitled ? ("Clip "+pad(clip.id)) : (clip.title||"");
   pCreator.textContent=clip.creator?("by "+clip.creator):"";
@@ -1460,6 +1461,7 @@ function openPlayer(clip){
 }
 function closePlayer(){
   rerolls=0;
+  if(voice){ try{ voice.pause(); }catch(e){} }
   if(document.fullscreenElement){ try{document.exitFullscreen();}catch(e){} }
   player.classList.remove("open");
   clearMedia();
@@ -1549,11 +1551,34 @@ pFind.addEventListener("keydown",function(e){
 /* ---------------- wiring ---------------- */
 spinBtn.addEventListener("click",spin);
 closeBtn.addEventListener("click",closePlayer);
+/* A spoken version of the note, if one was made, lives beside the list as
+   audio/<video id>.mp3. Nothing records whether it exists - the file is simply
+   asked for, and if it is not there the note is shown silently. That keeps the
+   link file to one line per clip with nothing extra to keep in step. */
+var voice=null;
+function loadVoice(clip){
+  if(voice){ try{ voice.pause(); }catch(e){} voice.removeAttribute("src"); voice.remove(); voice=null; }
+  var info=kindOf(clip);
+  if(!info.id || !(clip.note||"").trim()) return;
+  // it lives in the document rather than as a detached object: the browser
+  // manages it properly there, and it can be seen when something goes wrong
+  var a=document.createElement("audio");
+  a.id="voiceEl"; a.preload="auto"; a.hidden=true;
+  a.addEventListener("canplaythrough",function(){ a.dataset.ready="1"; },{once:true});
+  a.addEventListener("error",function(){ a.dataset.ready="0"; }); // no spoken version, and that is fine
+  a.src=toUrl("audio/"+info.id+".mp3");
+  player.appendChild(a);
+  voice=a;
+}
 endNoteBtn.addEventListener("click",function(){
   var show = endNote.hidden;
   endNote.hidden = !show;
   endLede.hidden = show;                       // the note takes the caption's place
   endNoteTxt.textContent = show ? "Hide" : "Show the note";
+  if(show && voice && voice.dataset.ready==="1"){
+    try{ voice.currentTime=0; voice.play().catch(function(){}); }catch(e){}
+  }
+  if(!show && voice){ try{ voice.pause(); }catch(e){} }
 });
 replayBtn.addEventListener("click",replay);
 igReplay.addEventListener("click",replay);

@@ -22,3 +22,21 @@ window.SYNC = {
   db:   "https://break-time-3722c-default-rtdb.firebaseio.com",
   room: "familyguy"
 };
+
+/* ---------------------------------------------------------------------
+   The voice note feature. Model names live here rather than in the page
+   because OpenAI renames them from time to time - when one stops working
+   the page says so and you change one line here instead of waiting for
+   somebody to edit the app.
+
+   NO KEY GOES IN THIS FILE. This repository is public; an OpenAI key in it
+   would be spendable by anyone who found it. The key is typed into the
+   review page and stays in that phone's own storage.
+   --------------------------------------------------------------------- */
+window.AI = {
+  transcribe: "gpt-4o-transcribe",   // speech -> text, any language
+  writer:     "gpt-4o-mini",         // tidies and shortens it into English
+  speaker:    "gpt-4o-mini-tts",     // text -> an American voice
+  voice:      "onyx",                // onyx, ash, echo and cedar are the male ones
+  seconds:    20                     // how long the spoken version should run
+};
