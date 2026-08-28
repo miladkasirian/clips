@@ -377,7 +377,14 @@ https://www.youtube.com/shorts/5lC8TL-BeOQ</div>
    progress silently re-labels every clip after the first drop.
    --------------------------------------------------------------------- */
 
-var LIST_URL = "../links.txt";
+/* The pool this page reviews is NOT the list the site plays.
+   They were the same file once, and publishing "kept only" shrank links.txt to
+   nine lines - which silently took every dropped and every undecided clip out of
+   this page's sight, because it could only see what was in that file. The pool
+   has to be the thing that never shrinks: everything ever considered, including
+   what has already been rejected. Publishing writes links.txt and never touches
+   this file. */
+var LIST_URL = "candidates.txt";
 var KEY      = "breaktime.review.v1";
 
 var $ = function(id){ return document.getElementById(id); };
@@ -1246,7 +1253,8 @@ fetch(LIST_URL, {cache:"no-store"})
   .catch(function(e){
     num.textContent = "Could not read links.txt";
     stage.innerHTML = '<div class="msg">' + String(e.message) +
-      '<br><br>This page expects to sit in a <code>tools/</code> folder with links.txt one level above it.</div>';
+      '<br><br>This page reads <code>candidates.txt</code> from its own folder &mdash; the full pool of clips ever considered. ' +
+      'That is deliberately a different file from the <code>links.txt</code> the site plays.</div>';
   });
 })();
 </script>
