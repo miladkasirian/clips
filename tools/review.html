@@ -251,7 +251,7 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
     </div>
     <div class="grid" style="margin-top:9px;grid-template-columns:1fr">
       <button class="act small" id="bExport" type="button">
-        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> Export / publish the list
+        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> <span id="bExportTxt">Export &mdash; everything except drops</span>
       </button>
     </div>
     <p class="hint">Progress saves by itself &mdash; close this and come back any time.
@@ -274,7 +274,7 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
     <div class="rows" id="rows"></div>
     <div class="grid">
       <button class="act keep" id="bPubKeep" type="button">
-        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> Export the kept list
+        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> <span id="bPubKeepTxt">Export &mdash; kept only</span>
       </button>
       <button class="act small" id="bListsClose" type="button">
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Back
@@ -385,6 +385,7 @@ var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$(
     bExport=$("bExport"), bReset=$("bReset"), sheet=$("sheet"), out=$("out"),
     bCopy=$("bCopy"), bDl=$("bDl"), bClose=$("bClose"), shTitle=$("shTitle"), shLede=$("shLede"), kb=$("kb"),
     live=$("live"), liveTxt=$("liveTxt"), flash=$("flash"),
+    bExportTxt=$("bExportTxt"), bPubKeepTxt=$("bPubKeepTxt"),
     bLists=$("bLists"), bAdd=$("bAdd"), lists=$("lists"), rows=$("rows"), bListsClose=$("bListsClose"),
     tKept=$("tKept"), tDropped=$("tDropped"), tSkipped=$("tSkipped"), bPubKeep=$("bPubKeep"),
     addSheet=$("addSheet"), addIn=$("addIn"), bCheck=$("bCheck"), bAddClose=$("bAddClose"), results=$("results"),
@@ -612,6 +613,10 @@ function paintCounts(){
   nKeep.textContent=c.keep; nDrop.textContent=c.drop; nSkip.textContent=c.skip; nLeft.textContent=c.left;
   pfill.style.width = ITEMS.length ? (decided/ITEMS.length*100)+"%" : "0%";
   bUndo.disabled = !HIST.length;
+  // the count is the only thing that reliably tells the two exports apart
+  var rest = ITEMS.length - c.drop;
+  bExportTxt.innerHTML  = "Export &mdash; " + rest + (rest===1?" clip":" clips") + " (all but drops)";
+  bPubKeepTxt.innerHTML = "Export &mdash; " + c.keep + (c.keep===1?" kept clip":" kept only");
 }
 
 /* ---------------- transport (YouTube gives embeds no controls of their own) ---- */
@@ -1027,7 +1032,7 @@ function openSheet(keptOnly){
   var ls = r.text.split(/\r?\n/);
   for(i=0;i<ls.length;i++){ var t=ls[i].trim(); if(t && t.charAt(0)!=="#") live++; }
   out.value = r.text;
-  shTitle.textContent = (keptOnly ? "The kept list — " : "Your new list — ") + live + " clips";
+  shTitle.textContent = (keptOnly ? "The kept list — " : "Your new list — ") + live + (live===1?" clip":" clips");
   shLede.textContent = keptOnly
     ? ("Only the " + c.keep + " clips marked Keep. The " + c.left + " you have not decided on yet are NOT in this list, "
        + "so publishing it now would take them off the site.")
@@ -1036,6 +1041,8 @@ function openSheet(keptOnly){
           + r.dropped + " you dropped, and your progress is kept.")
        : ("Everything except the " + r.dropped + " you dropped. The dropped links are commented out at the bottom, not deleted."));
   pubMsg.textContent = ""; paintPub();
+  bPublish.querySelector("span").textContent =
+    (token() ? "Publish " : "Save token and publish ") + live + (live===1?" clip":" clips") + " to the site";
   sheet.classList.add("open");
 }
 bExport.addEventListener("click", function(){ openSheet(false); });
