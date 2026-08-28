@@ -131,6 +131,56 @@ textarea{flex:1;min-height:120px;width:100%;resize:none;border-radius:13px;paddi
 .done p{color:var(--dim);font-size:14px;margin:0 auto}
 .msg{font-size:13px;color:var(--gold);text-align:center;padding:14px}
 a.btnlink{text-decoration:none}
+
+/* ---------- list browser ---------- */
+.tabs{display:flex;gap:7px;flex:none}
+.tab{flex:1;height:40px;border-radius:11px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;
+  border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--dim)}
+.tab.sel{background:rgba(77,141,255,.16);border-color:rgba(77,141,255,.5);color:var(--txt)}
+.rows{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;min-height:0;
+  border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.02)}
+.row2{border-bottom:1px solid var(--line)}
+.row2:last-child{border-bottom:0}
+.rhead{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer}
+.rhead b{font-family:var(--mono);font-size:13px;font-weight:700;flex:none;width:60px}
+.rhead span{flex:1;min-width:0;font-size:12.5px;color:var(--dim);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.rhead .go,.rhead .mvi{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;
+  border:1px solid var(--line2);background:rgba(255,255,255,.06);color:var(--txt);cursor:pointer}
+.rhead .go svg{width:12px;height:12px;fill:currentColor}
+.rhead .mvi svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;
+  stroke-linecap:round;stroke-linejoin:round}
+.rhead .mvi{color:var(--gold);border-color:rgba(255,200,97,.35);background:rgba(255,200,97,.10)}
+.row2.open .rbody .mv{margin-top:9px}
+.rbody{display:none;padding:0 12px 12px}
+.row2.open .rbody{display:block}
+.rbody .frame{position:relative;aspect-ratio:16/9;border-radius:11px;overflow:hidden;background:#000;
+  border:1px solid var(--line2)}
+.rbody iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.rbody .mv{margin-top:9px;height:40px;width:100%;border-radius:11px;cursor:pointer;font-family:inherit;
+  font-size:13px;font-weight:700;border:1px solid var(--line2);background:rgba(255,255,255,.06);color:var(--txt)}
+.empty{padding:34px 16px;text-align:center;color:var(--faint);font-size:13.5px}
+
+/* ---------- add links ---------- */
+.ex{font-family:var(--mono);font-size:11px;line-height:1.7;color:var(--faint);
+  background:#05080f;border:1px solid var(--line);border-radius:11px;padding:10px 12px;
+  white-space:pre;overflow-x:auto}
+#addIn{flex:none;height:120px}
+.results{flex:1;overflow:auto;min-height:0;font-size:12.5px}
+.res{display:flex;gap:9px;padding:8px 10px;border-bottom:1px solid var(--line);align-items:flex-start}
+.res:last-child{border-bottom:0}
+.res .ic{flex:none;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;
+  font-size:11px;font-weight:800;margin-top:1px}
+.res.y .ic{background:rgba(49,224,192,.18);color:var(--ok)}
+.res.n .ic{background:rgba(255,95,109,.18);color:var(--no)}
+.res.w .ic{background:rgba(255,200,97,.18);color:var(--gold)}
+.res div.t{flex:1;min-width:0}
+.res b{display:block;font-size:12.5px;font-weight:650;color:var(--txt);word-break:break-all}
+.res i{font-style:normal;color:var(--dim);font-size:11.5px}
+.res.n i{color:var(--no)} .res.w i{color:var(--gold)}
+.danger{background:rgba(255,95,109,.12);border-color:rgba(255,95,109,.4);color:#ffc9cd}
+input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:var(--mono);font-size:12px;
+  color:var(--txt);background:#05080f;border:1px solid var(--line2)}
 </style>
 </head>
 <body>
@@ -192,11 +242,16 @@ a.btnlink{text-decoration:none}
       </button>
     </div>
     <div class="grid" style="margin-top:9px">
-      <button class="act small" id="bExport" type="button">
-        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> Export list
+      <button class="act small" id="bLists" type="button">
+        <svg viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg> Kept &amp; dropped
       </button>
-      <button class="act small" id="bReset" type="button">
-        <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg> Start over
+      <button class="act small" id="bAdd" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg> Add links
+      </button>
+    </div>
+    <div class="grid" style="margin-top:9px;grid-template-columns:1fr">
+      <button class="act small" id="bExport" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> Export / publish the list
       </button>
     </div>
     <p class="hint">Progress saves by itself &mdash; close this and come back any time.
@@ -205,6 +260,51 @@ a.btnlink{text-decoration:none}
 </div>
 
 <div class="flash" id="flash"></div>
+
+<div class="sheet" id="lists">
+  <div class="inner">
+    <h2>Kept &amp; dropped</h2>
+    <div class="tabs">
+      <button class="tab sel" id="tKept" type="button" data-k="keep">Kept 0</button>
+      <button class="tab" id="tDropped" type="button" data-k="drop">Dropped 0</button>
+      <button class="tab" id="tSkipped" type="button" data-k="skip">Skipped 0</button>
+    </div>
+    <p style="font-size:12.5px;color:var(--dim)">Tap a clip to watch it. <b>Move</b> puts it on the
+      other list &mdash; the change reaches the other phone straight away.</p>
+    <div class="rows" id="rows"></div>
+    <div class="grid">
+      <button class="act keep" id="bPubKeep" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> Export the kept list
+      </button>
+      <button class="act small" id="bListsClose" type="button">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Back
+      </button>
+    </div>
+    <button class="act small danger" id="bReset" type="button">
+      <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg> Start over
+    </button>
+  </div>
+</div>
+
+<div class="sheet" id="addSheet">
+  <div class="inner">
+    <h2>Add links to the kept list</h2>
+    <p>One link per line, or just one. Every form of YouTube address works:</p>
+    <div class="ex">https://www.youtube.com/watch?v=ceYsWR8pbkE
+https://youtu.be/Lun4z5hMSAY
+https://www.youtube.com/shorts/5lC8TL-BeOQ</div>
+    <textarea id="addIn" placeholder="Paste one or more YouTube links here, one per line" spellcheck="false"></textarea>
+    <div class="grid">
+      <button class="act keep" id="bCheck" type="button">
+        <svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg> Check &amp; add
+      </button>
+      <button class="act small" id="bAddClose" type="button">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Back
+      </button>
+    </div>
+    <div class="results" id="results"></div>
+  </div>
+</div>
 
 <div class="sheet" id="sheet">
   <div class="inner">
@@ -233,6 +333,26 @@ a.btnlink{text-decoration:none}
       <button class="act small" id="bClose" type="button">
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Back to reviewing
       </button>
+    </div>
+    <div id="pubBox" style="border-top:1px solid var(--line);padding-top:12px">
+      <p style="margin-bottom:9px"><b style="color:var(--txt)">Or put it on the site directly.</b>
+        The old <code>links.txt</code> is saved first as
+        <code>backups/links-&lt;date&gt;-&lt;time&gt;.txt</code>, so nothing is lost.</p>
+      <div id="tokBox" hidden>
+        <p style="margin-bottom:8px">This needs a GitHub token with write access to
+          <code>miladkasirian/clips</code>. It is kept on <b>this phone only</b> and never
+          goes into the repository.</p>
+        <input class="tok" id="tokIn" type="password" placeholder="github_pat_..." autocomplete="off" spellcheck="false">
+      </div>
+      <div class="grid" style="margin-top:9px">
+        <button class="act keep" id="bPublish" type="button">
+          <svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg> <span id="pubTxt">Publish to the site</span>
+        </button>
+        <button class="act small" id="bForget" type="button" hidden>
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Forget token
+        </button>
+      </div>
+      <p id="pubMsg" style="margin-top:9px;font-size:12.5px"></p>
     </div>
   </div>
 </div>
@@ -264,8 +384,15 @@ var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$(
     donePanel=$("donePanel"), doneText=$("doneText"),
     bExport=$("bExport"), bReset=$("bReset"), sheet=$("sheet"), out=$("out"),
     bCopy=$("bCopy"), bDl=$("bDl"), bClose=$("bClose"), shTitle=$("shTitle"), shLede=$("shLede"), kb=$("kb"),
-    live=$("live"), liveTxt=$("liveTxt"), flash=$("flash");
+    live=$("live"), liveTxt=$("liveTxt"), flash=$("flash"),
+    bLists=$("bLists"), bAdd=$("bAdd"), lists=$("lists"), rows=$("rows"), bListsClose=$("bListsClose"),
+    tKept=$("tKept"), tDropped=$("tDropped"), tSkipped=$("tSkipped"), bPubKeep=$("bPubKeep"),
+    addSheet=$("addSheet"), addIn=$("addIn"), bCheck=$("bCheck"), bAddClose=$("bAddClose"), results=$("results"),
+    pubBox=$("pubBox"), tokBox=$("tokBox"), tokIn=$("tokIn"), bPublish=$("bPublish"), pubTxt=$("pubTxt"),
+    bForget=$("bForget"), pubMsg=$("pubMsg");
 
+var ADDED = {};        // id -> {url, title}  links typed in by hand, kept in Firebase
+var ADDKEY = "breaktime.review.token";   // the GitHub token, this device only
 var RAW = "";          // links.txt exactly as it was fetched
 var ITEMS = [];        // {id, url, line, n}  - only the live (uncommented) links
 var STATE = {};        // id -> "keep" | "drop" | "skip"
@@ -342,6 +469,12 @@ function fromServer(obj, partial){
   STATE = next;
   saveLocal();
   paintCounts();
+  if(lists.classList.contains("open")){
+    // relabel always; only rebuild the rows when nothing is playing, so a clip
+    // the other person is not touching does not get yanked out mid-sentence
+    labelTabs();
+    if(!openRow) paintRows();
+  }
   if(moved){
     say("Clip " + pad(cur.n) + " was " + WORD[nowCur] + " on the other phone");
     show();
@@ -409,11 +542,12 @@ function load(){
     var s = JSON.parse(localStorage.getItem(KEY) || "{}");
     STATE = s.state || {};
     HIST  = s.hist  || [];
+    ADDED = s.added || {};
   }catch(e){ STATE={}; HIST=[]; }
 }
 function saveLocal(){
   try{
-    localStorage.setItem(KEY, JSON.stringify({state:STATE, hist:HIST, at:Date.now()}));
+    localStorage.setItem(KEY, JSON.stringify({state:STATE, hist:HIST, added:ADDED, at:Date.now()}));
   }catch(e){ /* private mode - reviewing still works, it just will not resume */ }
 }
 
@@ -422,16 +556,32 @@ var IDRE = /(?:v=|youtu\.be\/|shorts\/|embed\/)([A-Za-z0-9_-]{6,})/;
 
 function parse(text){
   RAW = text;
-  var lines = text.split(/\r?\n/), out = [], n = 0;
+  var lines = text.split(/\r?\n/), out = [], n = 0, seen = {};
   for(var i=0;i<lines.length;i++){
     var t = lines[i].trim();
     if(!t || t.charAt(0)==="#") continue;      // commented lines are left completely alone
     var m = IDRE.exec(t);
-    if(!m) continue;
-    n++;
-    out.push({ id:m[1], url:t, line:i, n:n });
+    if(!m || seen[m[1]]) continue;
+    seen[m[1]] = 1; n++;
+    out.push({ id:m[1], url:t, line:i, n:n, fromFile:true });
+  }
+  // Links typed in by hand live in the database, not in links.txt, so they are
+  // appended here. Once one has been published into links.txt the copy above
+  // wins and the added copy is skipped, which is what stops duplicates.
+  for(var id in ADDED){
+    if(seen[id]) continue;
+    seen[id] = 1; n++;
+    out.push({ id:id, url:ADDED[id].url || ("https://www.youtube.com/watch?v="+id),
+               line:-1, n:n, added:true, title:ADDED[id].title || "" });
   }
   return out;
+}
+function rebuild(){
+  var wasCur = cur ? cur.id : null;
+  ITEMS = parse(RAW);
+  paintCounts();
+  if(!cur && undecided().length) show();
+  return wasCur;
 }
 function pad(n){
   var w = Math.max(2, String(ITEMS.length||0).length), s = String(n);
@@ -634,6 +784,8 @@ document.addEventListener("keydown", function(e){
     if(e.key==="Escape") sheet.classList.remove("open");
     return;
   }
+  if(lists.classList.contains("open")){ if(e.key==="Escape") sheetShut(lists); return; }
+  if(addSheet.classList.contains("open")){ if(e.key==="Escape") sheetShut(addSheet); return; }
   var k = e.key.toLowerCase();
   if(k==="d"){ e.preventDefault(); decide("drop"); }
   if(k==="k"){ e.preventDefault(); decide("keep"); }
@@ -643,8 +795,188 @@ document.addEventListener("keydown", function(e){
   if(e.key===" "){ e.preventDefault(); pp.click(); }
 });
 
+/* =====================================================================
+   THE TWO LISTS
+   ===================================================================== */
+var listKind = "keep", openRow = null;
+
+function sheetOpen(el){ el.classList.add("open"); }
+function sheetShut(el){ el.classList.remove("open"); closeRow(); }
+function closeRow(){
+  if(!openRow) return;
+  var f = openRow.querySelector("iframe");
+  if(f){ f.removeAttribute("src"); f.remove(); }   // stop the audio when it folds away
+  openRow.classList.remove("open");
+  openRow = null;
+}
+function labelTabs(){
+  var c = counts();
+  tKept.textContent    = "Kept " + c.keep;
+  tDropped.textContent = "Dropped " + c.drop;
+  tSkipped.textContent = "Skipped " + c.skip;
+}
+function paintRows(){
+  labelTabs();
+  closeRow();
+  rows.innerHTML = "";
+  var mine = ITEMS.filter(function(it){ return STATE[it.id] === listKind; });
+  if(!mine.length){
+    rows.innerHTML = '<div class="empty">Nothing on this list yet.</div>';
+    return;
+  }
+  mine.forEach(function(it){
+    var row = document.createElement("div");
+    row.className = "row2";
+    var other = listKind === "drop" ? "keep" : "drop";
+    row.innerHTML =
+      '<div class="rhead"><b>Clip ' + pad(it.n) + '</b>' +
+      '<span>' + (it.added ? "added by hand" : it.id) + '</span>' +
+      '<span class="mvi" title="Move to the other list"><svg viewBox="0 0 24 24">' +
+      '<path d="M7 7h13l-3-3"/><path d="M17 17H4l3 3"/></svg></span>' +
+      '<span class="go"><svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg></span></div>' +
+      '<div class="rbody"><div class="frame"></div>' +
+      '<button class="mv" type="button">Move to ' + (other === "keep" ? "kept" : "dropped") + '</button></div>';
+
+    row.querySelector(".rhead").addEventListener("click", function(){
+      if(row === openRow){ closeRow(); return; }
+      closeRow();
+      var f = document.createElement("iframe");
+      f.setAttribute("allow","autoplay; encrypted-media; fullscreen");
+      f.setAttribute("allowfullscreen","true");
+      f.setAttribute("sandbox","allow-scripts allow-same-origin allow-presentation");
+      f.src = "https://www.youtube-nocookie.com/embed/" + it.id +
+              "?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1";
+      row.querySelector(".frame").appendChild(f);
+      row.classList.add("open"); openRow = row;
+      row.scrollIntoView({block:"nearest", behavior:"smooth"});
+    });
+    function move(e){
+      e.stopPropagation();
+      var patch = {};
+      STATE[it.id] = other; patch[it.id] = other;
+      saveLocal(); syncSend(patch);
+      paintCounts(); paintRows();
+      say("Clip " + pad(it.n) + " moved to " + (other === "keep" ? "kept" : "dropped"));
+    }
+    // reachable from the row itself as well as from inside it, so a clip can be
+    // moved without having to start it playing first
+    row.querySelector(".mvi").addEventListener("click", move);
+    row.querySelector(".mv").addEventListener("click", move);
+    rows.appendChild(row);
+  });
+}
+[tKept, tDropped, tSkipped].forEach(function(b){
+  b.addEventListener("click", function(){
+    listKind = b.getAttribute("data-k");
+    [tKept,tDropped,tSkipped].forEach(function(x){ x.classList.toggle("sel", x===b); });
+    paintRows();
+  });
+});
+bLists.addEventListener("click", function(){ pullAdded(function(){ paintRows(); sheetOpen(lists); }); });
+bListsClose.addEventListener("click", function(){ sheetShut(lists); });
+
+/* =====================================================================
+   ADDING LINKS BY HAND
+   ---------------------------------------------------------------------
+   A pasted link is checked against YouTube's oEmbed endpoint before it is
+   accepted. That is the only endpoint that needs no key, it answers
+   cross-origin, and it separates the three cases that matter: a real video
+   comes back with its title, a dead or private one gives 400/404, and one
+   whose uploader disabled embedding gives 401 - which would otherwise only
+   show up as a black box in the middle of class.
+   ===================================================================== */
+function addedPath(){ return SYNC.on ? SYNC.base.replace(/decisions$/, "added") : null; }
+function pullAdded(done){
+  var url = addedPath();
+  if(!url){ done && done(); return; }
+  fetch(url + ".json?t=" + Date.now(), {cache:"no-store"})
+    .then(function(r){ return r.json(); })
+    .then(function(o){ ADDED = o || {}; rebuild(); done && done(); })
+    .catch(function(){ done && done(); });
+}
+function pushAdded(id, rec){
+  ADDED[id] = rec;
+  var url = addedPath();
+  if(!url) return;
+  var patch = {}; patch[id] = rec;
+  fetch(url + ".json", {method:"PATCH", headers:{"Content-Type":"application/json"},
+                        body:JSON.stringify(patch)}).catch(function(){});
+}
+function resLine(kind, url, note){
+  var d = document.createElement("div");
+  d.className = "res " + kind;
+  d.innerHTML = '<span class="ic">' + (kind==="y"?"&#10003;":kind==="w"?"!":"&times;") + '</span>' +
+                '<div class="t"><b></b><i></i></div>';
+  d.querySelector("b").textContent = url;
+  d.querySelector("i").textContent = note;
+  results.appendChild(d);
+  return d;
+}
+function checkOne(line){
+  return new Promise(function(resolve){
+    var raw = line.trim();
+    if(!/^https?:\/\//i.test(raw) && !/^(www\.)?(youtube|youtu)/i.test(raw)){
+      return resolve({kind:"n", note:"that is not a web address"});
+    }
+    if(!/youtube\.com|youtu\.be/i.test(raw)){
+      return resolve({kind:"n", note:"only YouTube links can be added here"});
+    }
+    var m = IDRE.exec(raw);
+    if(!m) return resolve({kind:"n", note:"no video id in that link - check you copied all of it"});
+    var id = m[1];
+    var already = ITEMS.filter(function(it){ return it.id === id; })[0];
+    if(already) return resolve({kind:"w", id:id,
+      note:"already on the list as clip " + pad(already.n) + (STATE[id] ? " (" + WORD[STATE[id]] + ")" : "")});
+    fetch("https://www.youtube.com/oembed?format=json&url=" +
+          encodeURIComponent("https://www.youtube.com/watch?v=" + id))
+      .then(function(r){
+        if(r.status === 401) return resolve({kind:"n", note:"this one refuses to play outside YouTube"});
+        if(!r.ok)            return resolve({kind:"n", note:"YouTube does not know this video (it may be deleted or private)"});
+        return r.json().then(function(j){
+          resolve({kind:"y", id:id, title:j.title || "", note:(j.title || "added") +
+                   (j.author_name ? "  \u00b7  " + j.author_name : "")});
+        });
+      })
+      .catch(function(){ resolve({kind:"w", note:"could not reach YouTube to check this one - try again"}); });
+  });
+}
+bAdd.addEventListener("click", function(){ results.innerHTML=""; pullAdded(function(){ sheetOpen(addSheet); addIn.focus(); }); });
+bAddClose.addEventListener("click", function(){ sheetShut(addSheet); });
+bCheck.addEventListener("click", function(){
+  var lines = addIn.value.split(/\r?\n/).filter(function(l){ return l.trim(); });
+  results.innerHTML = "";
+  if(!lines.length){ resLine("w","", "Nothing pasted yet."); return; }
+  bCheck.disabled = true;
+  var good = 0, i = 0;
+  (function next(){
+    if(i >= lines.length){
+      bCheck.disabled = false;
+      if(good){
+        rebuild(); paintCounts();
+        say(good + (good===1 ? " link added to kept" : " links added to kept"));
+        addIn.value = "";
+      }
+      return;
+    }
+    var line = lines[i++];
+    var placeholder = resLine("w", line.trim(), "checking\u2026");
+    checkOne(line).then(function(r){
+      placeholder.className = "res " + r.kind;
+      placeholder.querySelector(".ic").innerHTML = r.kind==="y" ? "&#10003;" : r.kind==="w" ? "!" : "&times;";
+      placeholder.querySelector("i").textContent = r.note;
+      if(r.kind === "y"){
+        good++;
+        pushAdded(r.id, {url:"https://www.youtube.com/watch?v=" + r.id, title:r.title || ""});
+        var patch = {}; STATE[r.id] = "keep"; patch[r.id] = "keep";
+        saveLocal(); syncSend(patch);
+      }
+      next();
+    });
+  })();
+});
+
 /* ---------------- export ---------------- */
-function buildFile(){
+function buildFile(keptOnly){
   var dropped = [], lines = RAW.split(/\r?\n/), keep = [], i, t, m, id;
   for(i=0;i<lines.length;i++){
     t = lines[i];
@@ -652,8 +984,19 @@ function buildFile(){
     if(!trimmed || trimmed.charAt(0)==="#"){ keep.push(t); continue; }  // comments pass through untouched
     m = IDRE.exec(trimmed);
     id = m ? m[1] : null;
-    if(id && STATE[id]==="drop"){ dropped.push(trimmed); continue; }
+    // "everything except the drops" keeps the undecided ones; "kept only" is the
+    // narrower list and throws away anything nobody has said yes to yet
+    var out = id && (keptOnly ? STATE[id] !== "keep" : STATE[id] === "drop");
+    if(out){ if(STATE[id]==="drop") dropped.push(trimmed); continue; }
     keep.push(t);
+  }
+  // links typed in by hand are not in the file yet, so they go on the end
+  var extra = ITEMS.filter(function(it){
+    return it.added && (keptOnly ? STATE[it.id]==="keep" : STATE[it.id]!=="drop");
+  });
+  if(extra.length){
+    keep.push(""); keep.push("# ---- added by hand ----");
+    extra.forEach(function(it){ keep.push(it.url); });
   }
   var text = keep.join("\n").replace(/\n{3,}$/,"\n");
   // the file states its own live count in a comment, so leaving it at 200 after
@@ -677,19 +1020,26 @@ function buildFile(){
   }
   return {text:text.replace(/\s*$/,"") + "\n", dropped:dropped.length};
 }
-function openSheet(){
-  var r = buildFile(), c = counts(), live = 0, i;
+var lastKeptOnly = false;
+function openSheet(keptOnly){
+  lastKeptOnly = !!keptOnly;
+  var r = buildFile(keptOnly), c = counts(), live = 0, i;
   var ls = r.text.split(/\r?\n/);
   for(i=0;i<ls.length;i++){ var t=ls[i].trim(); if(t && t.charAt(0)!=="#") live++; }
   out.value = r.text;
-  shTitle.textContent = "Your new list — " + live + " clips";
-  shLede.textContent = c.left
-    ? ("You still have " + c.left + " to look at. Exporting now is fine — this is everything except the "
-       + r.dropped + " you dropped, and your progress is kept.")
-    : ("Everything except the " + r.dropped + " you dropped. The dropped links are commented out at the bottom, not deleted.");
+  shTitle.textContent = (keptOnly ? "The kept list — " : "Your new list — ") + live + " clips";
+  shLede.textContent = keptOnly
+    ? ("Only the " + c.keep + " clips marked Keep. The " + c.left + " you have not decided on yet are NOT in this list, "
+       + "so publishing it now would take them off the site.")
+    : (c.left
+       ? ("You still have " + c.left + " to look at. Exporting now is fine — this is everything except the "
+          + r.dropped + " you dropped, and your progress is kept.")
+       : ("Everything except the " + r.dropped + " you dropped. The dropped links are commented out at the bottom, not deleted."));
+  pubMsg.textContent = ""; paintPub();
   sheet.classList.add("open");
 }
-bExport.addEventListener("click", openSheet);
+bExport.addEventListener("click", function(){ openSheet(false); });
+bPubKeep.addEventListener("click", function(){ sheetShut(lists); openSheet(true); });
 bClose.addEventListener("click", function(){ sheet.classList.remove("open"); });
 bCopy.addEventListener("click", function(){
   out.focus(); out.select(); out.setSelectionRange(0, out.value.length);
@@ -708,6 +1058,99 @@ bDl.addEventListener("click", function(){
   document.body.appendChild(a); a.click();
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
 });
+/* =====================================================================
+   PUBLISHING TO THE SITE
+   ---------------------------------------------------------------------
+   GitHub Pages serves files; only the GitHub API can change one. That needs
+   a credential, and a credential cannot live in a public repository - so the
+   token is typed in here and kept in this phone's own storage. It is never
+   written to the repo, never sent anywhere except api.github.com, and
+   "Forget token" erases it.
+
+   The old links.txt is copied to backups/ under today's date and time BEFORE
+   the new one is written, so a bad publish is always one file away from being
+   undone.
+   ===================================================================== */
+var REPO = "miladkasirian/clips", BRANCH = "main";
+function token(){ try{ return localStorage.getItem(ADDKEY) || ""; }catch(e){ return ""; } }
+function paintPub(){
+  var t = token();
+  tokBox.hidden = !!t;
+  bForget.hidden = !t;
+  pubTxt.textContent = t ? "Publish to the site" : "Save token and publish";
+}
+function gh(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({
+    "Authorization": "Bearer " + token(),
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28"
+  }, opts.headers || {});
+  return fetch("https://api.github.com/repos/" + REPO + "/" + path, opts);
+}
+function b64(text){
+  // btoa cannot take characters above 255; the list is plain ASCII but a title
+  // in a comment could easily not be
+  return btoa(String.fromCharCode.apply(null, new TextEncoder().encode(text)));
+}
+function stamp(){
+  var d = new Date(), p = function(n){ return (n<10?"0":"") + n; };
+  return d.getFullYear() + "-" + p(d.getMonth()+1) + "-" + p(d.getDate()) +
+         "_" + p(d.getHours()) + p(d.getMinutes());
+}
+function pub(msg, colour){
+  pubMsg.textContent = msg;
+  pubMsg.style.color = colour === "bad" ? "var(--no)" : colour === "good" ? "var(--ok)" : "var(--dim)";
+}
+bForget.addEventListener("click", function(){
+  try{ localStorage.removeItem(ADDKEY); }catch(e){}
+  tokIn.value = ""; paintPub(); pub("Token erased from this phone.", "good");
+});
+bPublish.addEventListener("click", function(){
+  var t = token();
+  if(!t){
+    t = (tokIn.value || "").trim();
+    if(!t){ pub("Paste your GitHub token first.", "bad"); return; }
+    try{ localStorage.setItem(ADDKEY, t); }catch(e){}
+    tokIn.value = ""; paintPub();
+  }
+  var text = out.value, live = 0;
+  text.split(/\r?\n/).forEach(function(l){ l=l.trim(); if(l && l.charAt(0)!=="#") live++; });
+  if(!live){ pub("That list has no live links in it. Nothing published.", "bad"); return; }
+  if(!confirm("Put " + live + " clips on the site?\n\n" +
+              (lastKeptOnly ? "This is the KEPT list only - undecided clips will come off the site.\n\n" : "") +
+              "The current links.txt is saved to backups/ first.")) return;
+
+  bPublish.disabled = true;
+  pub("Reading the file that is on the site\u2026");
+  gh("contents/links.txt?ref=" + BRANCH).then(function(r){
+    if(r.status === 401 || r.status === 403) throw new Error("GitHub refused the token. Check it has Contents write access to " + REPO + ".");
+    if(!r.ok) throw new Error("Could not read links.txt (HTTP " + r.status + ").");
+    return r.json();
+  }).then(function(cur){
+    var name = "backups/links-" + stamp() + ".txt";
+    pub("Saving the old one as " + name + "\u2026");
+    return gh("contents/" + name, {
+      method:"PUT", body: JSON.stringify({
+        message:"Back up links.txt before publishing from the review page",
+        content: cur.content.replace(/\n/g,""), branch: BRANCH })
+    }).then(function(r){
+      if(!r.ok && r.status !== 422) throw new Error("Backup failed (HTTP " + r.status + "). Nothing was changed.");
+      pub("Writing the new links.txt\u2026");
+      return gh("contents/links.txt", {
+        method:"PUT", body: JSON.stringify({
+          message:"Publish " + live + " clips from the review page",
+          content: b64(text), sha: cur.sha, branch: BRANCH })
+      });
+    }).then(function(r){
+      if(!r.ok) return r.text().then(function(x){ throw new Error("Publish failed (HTTP " + r.status + "). " + x.slice(0,120)); });
+      pub("Done \u2014 " + live + " clips are on the site. Give GitHub a minute, then refresh the main page. The old list is in backups/.", "good");
+    });
+  }).catch(function(e){
+    pub(String(e.message || e), "bad");
+  }).then(function(){ bPublish.disabled = false; });
+});
+
 bReset.addEventListener("click", function(){
   var msg = SYNC.on
     ? "Start over for EVERYONE?\n\nThis clears the shared list, so the other phone loses its progress too. links.txt is untouched."
@@ -730,10 +1173,15 @@ fetch(LIST_URL, {cache:"no-store"})
     // are quietly forgotten rather than shifting everything else along
     var seen = {}, i;
     for(i=0;i<ITEMS.length;i++) seen[ITEMS[i].id]=1;
-    for(var k in STATE) if(!seen[k]) delete STATE[k];
+    for(var k in STATE) if(!seen[k] && !ADDED[k]) delete STATE[k];
     HIST = HIST.filter(function(id){ return seen[id]; });
     show();                 // the cached view paints immediately
+    paintPub();
     startStream();          // and the shared one lands on top of it
+    // hand-added links live beside the decisions; fetch them, then keep an eye
+    // on them in case the other phone adds one
+    pullAdded();
+    setInterval(function(){ if(!document.hidden) pullAdded(); }, 20000);
   })
   .catch(function(e){
     num.textContent = "Could not read links.txt";
