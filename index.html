@@ -173,30 +173,32 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 .btn[hidden]{display:none}
 .p-note{text-align:center;font-size:11.5px;color:var(--txt-faint);letter-spacing:.2px;padding:0 6px;width:var(--w);min-width:260px}
 
-/* ---------- manual picker ---------- */
+/* ---------- manual picker ----------
+   Deliberately loads nothing. Mounting hundreds of Instagram embeds made the
+   page crawl and gave Instagram every reason to throttle the browser, which in
+   turn poisons playback for the rest of the session. Numbers only. */
 #picker{position:fixed;inset:0;z-index:45;display:none;flex-direction:column;
-  background:rgba(4,7,14,.94);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
-#picker.open{display:flex;animation:fadeIn .22s ease}
-.ph{display:flex;align-items:center;gap:14px;padding:16px 22px 12px}
-.ph h2{font-size:17px;font-weight:750;letter-spacing:-.3px}
+  background:rgba(4,7,14,.95);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+#picker.open{display:flex;animation:fadeIn .2s ease}
+.ph{display:flex;align-items:center;gap:14px;padding:18px 24px 10px}
+.ph h2{font-size:18px;font-weight:750;letter-spacing:-.3px;white-space:nowrap}
+.ph .cnt{font-family:var(--mono);font-size:12px;color:var(--txt-faint);letter-spacing:.5px}
 .ph .sp{flex:1}
-.ph input{height:36px;width:min(240px,40vw);border-radius:10px;padding:0 12px;font-family:inherit;font-size:13px;
+.ph input{height:38px;width:min(220px,38vw);border-radius:10px;padding:0 13px;font-family:var(--mono);font-size:13px;
   background:rgba(255,255,255,.05);border:1px solid var(--line-2);color:var(--txt)}
-.ph input::placeholder{color:var(--txt-faint)}
-#pgrid{flex:1;overflow:auto;padding:4px 22px 22px;display:grid;gap:14px;
-  grid-template-columns:repeat(auto-fill,minmax(150px,1fr));align-content:start}
-.pcell{position:relative;aspect-ratio:4/5;border-radius:13px;overflow:hidden;cursor:pointer;
-  background:#05080f;border:1px solid var(--line);transition:.16s ease}
-.pcell:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 16px 34px -16px rgba(49,224,192,.6)}
-.pcell iframe{position:absolute;top:-54px;left:0;width:100%;height:calc(100% + 420px);border:0;pointer-events:none}
-.pcell .n{position:absolute;left:8px;top:8px;z-index:3;font-family:var(--mono);font-size:11px;font-weight:700;
-  padding:3px 7px;border-radius:6px;background:rgba(4,7,14,.82);color:var(--gold)}
-.pcell .ph2{position:absolute;inset:0;z-index:1;display:grid;place-items:center;color:var(--txt-faint);font-size:26px}
-.pcell .go{position:absolute;inset:0;z-index:4;display:grid;place-items:center;opacity:0;transition:.16s;
-  background:linear-gradient(0deg,rgba(4,7,14,.75),rgba(49,224,192,.18))}
-.pcell:hover .go{opacity:1}
-.pcell .go b{font-size:13px;font-weight:750;color:#fff;letter-spacing:.4px}
+.ph input::placeholder{color:var(--txt-faint);font-family:var(--font)}
+#pgrid{flex:1;overflow:auto;padding:6px 24px 26px;display:grid;gap:9px;
+  grid-template-columns:repeat(auto-fill,minmax(78px,1fr));align-content:start}
+.pcell{position:relative;aspect-ratio:1;border-radius:12px;cursor:pointer;display:grid;place-items:center;
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+  border:1px solid var(--line);font-family:var(--mono);font-size:17px;font-weight:700;
+  color:var(--txt-dim);letter-spacing:.5px;transition:.13s ease}
+.pcell:hover{color:#04121a;border-color:transparent;transform:translateY(-2px);
+  background:linear-gradient(140deg,var(--accent),var(--accent-2));
+  box-shadow:0 12px 26px -12px rgba(49,224,192,.75)}
+.pcell.seen{color:var(--txt-faint);border-style:dashed}
 .pcell.hidden{display:none}
+.pempty{grid-column:1/-1;padding:26px 4px;color:var(--txt-faint);font-size:13.5px;text-align:center}
 
 #confetti{position:fixed;inset:0;z-index:38;pointer-events:none}
 #toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:60;opacity:0;pointer-events:none;
@@ -272,7 +274,8 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 <div id="picker" role="dialog" aria-modal="true" aria-label="Choose a clip">
   <div class="ph">
     <h2>Pick a clip</h2>
-    <input id="pFind" type="search" placeholder="filter by number or account…" autocomplete="off">
+    <span class="cnt" id="pCount"></span>
+    <input id="pFind" type="search" placeholder="jump to a number…" autocomplete="off" inputmode="numeric">
     <div class="sp"></div>
     <button class="iconbtn" id="pClose" type="button" title="Close (Esc)" aria-label="Close">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -751,7 +754,7 @@ var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),c
     openBtn=$("openBtn"),againBtn=$("againBtn"),closeBtn=$("closeBtn"),
     srcChip=$("srcChip"),srcTxt=$("srcTxt"),sndChip=$("sndChip"),fileIn=$("fileIn"),toastEl=$("toast"),
     panel=$("panel"),panelBody=$("panelBody"),
-    picker=$("picker"),pgrid=$("pgrid"),pFind=$("pFind"),pickChip=$("pickChip"),pClose=$("pClose");
+    picker=$("picker"),pgrid=$("pgrid"),pFind=$("pFind"),pCount=$("pCount"),pickChip=$("pickChip"),pClose=$("pClose");
 
 var CLIPS=[],SOURCE="built-in copy",spinning=false,current=null,loadTimer=null,msgHook=null,deadTimer=null,rerolls=0;
 var PAGE_IS_LOCAL = location.protocol === "file:";
@@ -1163,78 +1166,57 @@ function syncFS(){
 }
 
 /* =====================================================================
-   MANUAL PICKER - a scrollable wall of first frames.
-   Each tile is the same cropped Instagram embed the player uses, but it is
-   only mounted while it is on screen, so a list of two hundred stays light.
+   MANUAL PICKER - numbers only, on purpose.
+   An earlier version showed the first frame of every clip by mounting the real
+   Instagram embed in each tile. With a few hundred clips that made opening the
+   panel painfully slow and hammered Instagram hard enough to get the browser
+   throttled, which then broke playback for the rest of the session. No network
+   here at all now: the panel opens instantly and costs nothing.
    ===================================================================== */
-var pObserver=null;
-
 function buildPicker(){
-  pgrid.innerHTML="";
-  if(pObserver){ pObserver.disconnect(); pObserver=null; }
+  var frag=document.createDocumentFragment();
   CLIPS.forEach(function(c,idx){
-    var k=kindOf(c);
-    var cell=document.createElement("div");
-    cell.className="pcell";
-    cell.dataset.idx=idx;
     var num=c.id||idx+1;
-    // match both "4" and the padded "04" the tile actually shows
-    cell.dataset.find=(num+" "+pad(num)+" "+(c.creator||"")+" "+(c.title||"")+" "+
-                       (k.kind||"")+" "+(k.id||"")).toLowerCase();
-    cell.title=(c.title||"Clip "+(c.id||idx+1));
-    cell.innerHTML='<div class="ph2">'+(k.kind==="instagram"?"&#9654;":"&#9834;")+'</div>'+
-                   '<div class="n">'+pad(c.id||idx+1)+'</div>'+
-                   '<div class="go"><b>Play</b></div>';
-    cell.addEventListener("click",function(){
-      closePicker();
-      current=c;
-      openPlayer(c);
-    });
-    pgrid.appendChild(cell);
+    var cell=document.createElement("div");
+    cell.className="pcell"+(sessionBad[(kindOf(c)||{}).id]?" seen":"");
+    cell.dataset.idx=idx;
+    cell.dataset.num=String(num);
+    cell.textContent=pad(num);
+    cell.title=c.title||("Clip "+num);
+    cell.addEventListener("click",function(){ closePicker(); current=c; openPlayer(c); });
+    frag.appendChild(cell);
   });
-
-  pObserver=new IntersectionObserver(function(entries){
-    entries.forEach(function(en){
-      var cell=en.target, idx=+cell.dataset.idx, c=CLIPS[idx];
-      if(!c) return;
-      if(en.isIntersecting){
-        if(cell.querySelector("iframe")) return;
-        var k=kindOf(c);
-        if(k.kind!=="instagram"||!k.id) return;      // only IG gives a free poster frame
-        var f=document.createElement("iframe");
-        f.setAttribute("scrolling","no");
-        f.setAttribute("sandbox","allow-scripts allow-same-origin");
-        f.setAttribute("loading","lazy");
-        f.src="https://www.instagram.com/reel/"+k.id+"/embed/";
-        cell.insertBefore(f,cell.firstChild);
-      }else{
-        var old=cell.querySelector("iframe");
-        if(old){ old.removeAttribute("src"); old.remove(); }   // free it again when it scrolls away
-      }
-    });
-  },{root:pgrid,rootMargin:"600px 0px"});
-
-  Array.prototype.forEach.call(pgrid.children,function(c){ pObserver.observe(c); });
+  pgrid.innerHTML="";
+  pgrid.appendChild(frag);
+  var e=document.createElement("div"); e.className="pempty"; e.id="pEmpty";
+  e.style.display="none"; e.textContent="no clip with that number";
+  pgrid.appendChild(e);
+  pCount.textContent=CLIPS.length+" clips";
 }
 function openPicker(){
   if(!CLIPS.length){ toast("The list is empty."); return; }
   buildPicker();
   pFind.value="";
   picker.classList.add("open");
-  setTimeout(function(){ pFind.focus(); },80);
+  setTimeout(function(){ pFind.focus(); },70);
 }
-function closePicker(){
-  picker.classList.remove("open");
-  if(pObserver){ pObserver.disconnect(); pObserver=null; }
-  pgrid.innerHTML="";
-}
+function closePicker(){ picker.classList.remove("open"); pgrid.innerHTML=""; }
 pickChip.addEventListener("click",openPicker);
 pClose.addEventListener("click",closePicker);
 pFind.addEventListener("input",function(){
-  var q=pFind.value.trim().toLowerCase();
-  Array.prototype.forEach.call(pgrid.children,function(cell){
-    cell.classList.toggle("hidden", !!q && cell.dataset.find.indexOf(q)<0);
+  var q=pFind.value.trim().replace(/^0+/,""), shown=0;
+  Array.prototype.forEach.call(pgrid.querySelectorAll(".pcell"),function(cell){
+    var hit=!q || cell.dataset.num.indexOf(q)===0;
+    cell.classList.toggle("hidden",!hit);
+    if(hit) shown++;
   });
+  var e=$("pEmpty"); if(e) e.style.display = shown ? "none" : "block";
+  pCount.textContent = q ? shown+" of "+CLIPS.length : CLIPS.length+" clips";
+});
+pFind.addEventListener("keydown",function(e){
+  if(e.key!=="Enter") return;
+  var first=pgrid.querySelector(".pcell:not(.hidden)");
+  if(first) first.click();
 });
 
 /* ---------------- wiring ---------------- */
