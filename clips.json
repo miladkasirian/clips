@@ -2,14 +2,10 @@
   "meta": {
     "appName": "Break Time",
     "badge": "🍿",
-    "course": "FIN 220",
-    "courseName": "Financial Management",
     "heading": "Time for a",
     "headingAccent": "Break",
-    "brandingNote": "Labels only - change them for any course. badge is the little square top-left (an emoji or up to 4 characters). Drop course/courseName and the line under the name disappears. Add \"subtitle\" if you want a line under the big heading; leave it out and there is none. One deployment can serve several classes: keep acc302.json, fin322.json beside index.html and open ?clips=acc302.json",
+    "brandingNote": "Labels only. appName is the name top-left and the browser tab. badge is the little square (an emoji or up to 4 characters). Add \"course\" and \"courseName\" if you ever want a line under the name and the course code in the tab - leave them out and neither appears. \"subtitle\" adds a line under the big heading. One deployment can serve several classes: keep acc302.json beside index.html and open ?clips=acc302.json",
     "_": "---- the rest is documentation, not settings ----",
-    "term": "Fall 2026",
-    "instructor": "Milad Kasirian",
     "schemaVersion": 3,
     "verified": "2026-08-28",
     "howToEdit": [
