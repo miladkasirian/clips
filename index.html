@@ -148,7 +148,23 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 .shell .loading.gone{opacity:0;pointer-events:none}
 .spinner{width:34px;height:34px;border-radius:50%;border:2.5px solid rgba(255,255,255,.14);border-top-color:var(--accent);animation:rot .8s linear infinite}
 @keyframes rot{to{transform:rotate(360deg)}}
-.endcard,.errcard{position:absolute;inset:0;z-index:3;display:none;flex-direction:column;align-items:center;justify-content:center;
+/* Instagram draws its own end card with a play button that is really an
+   <a target="_blank"> to instagram.com. The sandbox makes it inert on purpose, so
+   it looks clickable and does nothing. This is our own replay control sitting on
+   top of exactly that spot. It stays out of the way until the clip has been
+   started (before that, the button underneath is Instagram's real one and works). */
+.igreplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.86);z-index:4;
+  width:84px;height:84px;border-radius:50%;padding:0;cursor:pointer;color:#fff;
+  border:1px solid rgba(255,255,255,.30);background:rgba(6,10,18,.70);backdrop-filter:blur(7px);
+  display:grid;place-items:center;opacity:0;pointer-events:none;
+  transition:opacity .18s ease,transform .18s ease,background .18s ease}
+.shell:hover .igreplay.armed,.igreplay.armed:focus-visible{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.igreplay:hover{background:rgba(12,19,32,.94);border-color:rgba(255,255,255,.55)}
+.igreplay svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.igreplay b{position:absolute;left:50%;bottom:-27px;transform:translateX(-50%);
+  font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:rgba(255,255,255,.78);white-space:nowrap;text-shadow:0 1px 6px rgba(0,0,0,.9)}
+.endcard,.errcard{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;align-items:center;justify-content:center;
   gap:16px;padding:26px;text-align:center;background:rgba(4,7,14,.92);backdrop-filter:blur(8px)}
 .endcard.show,.errcard.show{display:flex}
 .endcard p{font-size:14px;color:var(--txt-dim)}
@@ -304,6 +320,9 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 
     <div class="shell" id="shell">
       <div class="loading" id="loading"><div class="spinner"></div></div>
+      <button class="igreplay" id="igReplay" type="button" title="Play this clip again (R)" aria-label="Play again">
+        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><b>Play again</b>
+      </button>
       <div class="endcard" id="endcard">
         <p>Clip finished</p>
         <button class="btn primary" style="flex:none;padding:0 22px" id="endReplay" type="button">
@@ -747,7 +766,7 @@ var DATA_URL = "";
 
 var $=function(id){return document.getElementById(id);};
 var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),counter=$("counter"),
-    player=$("player"),wrap=$("wrap"),shell=$("shell"),loading=$("loading"),endcard=$("endcard"),
+    player=$("player"),wrap=$("wrap"),shell=$("shell"),loading=$("loading"),endcard=$("endcard"),igReplay=$("igReplay"),
     errcard=$("errcard"),errH=$("errH"),errD=$("errD"),
     pTopic=$("pTopic"),pKind=$("pKind"),pTitle=$("pTitle"),pCreator=$("pCreator"),pNote=$("pNote"),
     replayBtn=$("replayBtn"),endReplay=$("endReplay"),fsBtn=$("fsBtn"),fsTxt=$("fsTxt"),fsIcon=$("fsIcon"),
@@ -757,6 +776,8 @@ var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),c
     picker=$("picker"),pgrid=$("pgrid"),pFind=$("pFind"),pCount=$("pCount"),pickChip=$("pickChip"),pClose=$("pClose");
 
 var CLIPS=[],SOURCE="built-in copy",spinning=false,current=null,loadTimer=null,msgHook=null,deadTimer=null,rerolls=0;
+var focusHook=null,armTimer=null;   // watches for the click that lands inside the embed
+var retriedOnce=false;     // one silent rebuild per clip, never a different clip
 var PAGE_IS_LOCAL = location.protocol === "file:";
 
 /* ---------------- helpers ---------------- */
@@ -869,7 +890,10 @@ function syncWidth(){
 // clips were being rolled past - pressing Replay brought the very same clip up fine.
 // Wait properly, tell the room it is still coming, and only move on when it really
 // has not arrived.
-var PLAY_MS=13000, SLOW_MS=5000;
+var PLAY_MS=11000, SLOW_MS=5000;
+// how long Instagram's own (working) play button keeps the middle of the frame to
+// itself before our replay button takes it over
+var ARM_MS=8000;
 var sessionBad={};        // this tab only - never persisted, never changes the count
 var guard={day:"",dead:{},ok:{}};
 
@@ -972,6 +996,9 @@ function clearMedia(){
   clearTimeout(loadTimer); clearTimeout(deadTimer);
   loading.innerHTML='<div class="spinner"></div>';
   if(msgHook){ window.removeEventListener("message",msgHook); msgHook=null; }
+  if(focusHook){ window.removeEventListener("blur",focusHook); focusHook=null; }
+  clearTimeout(armTimer);
+  igReplay.classList.remove("armed");
   var m=shell.querySelectorAll("iframe,video"),i;
   for(i=0;i<m.length;i++){ try{ m[i].pause&&m[i].pause(); }catch(e){} m[i].removeAttribute("src"); m[i].remove(); }
   shell.classList.remove("ig");
@@ -1027,15 +1054,37 @@ var RENDER={
       if(!mounted && shell.contains(f)) loading.innerHTML='<div class="spinner"></div>';
     },SLOW_MS);
     deadTimer=setTimeout(function(){
-      if(!mounted && shell.contains(f)) rerollPastDead(info.id);
       clearTimeout(slowTimer);
+      if(mounted || !shell.contains(f)) return;
+      // The number on screen must stay the number that was drawn. Quietly rebuilding
+      // the SAME embed once is invisible and fixes most cold or throttled frames;
+      // swapping in a different clip is not a fix, it is a lie about what was picked.
+      if(!retriedOnce){ retriedOnce=true; mount(current); return; }
+      showError("Clip "+pad(current.id)+" is not coming up",
+        "The embed stayed silent twice, which is nearly always the connection rather than the clip itself.<br><br>"+
+        "Press <b>Replay</b> to give it another go, or the <b>spin</b> button on the right for a different clip.");
     },PLAY_MS);
+    // Instagram's end card is one big link and the sandbox keeps it inert, so arm our
+    // own replay button the moment the click lands inside the frame (window loses focus
+    // to the iframe). Before that the real play button is underneath and must stay clear.
+    // Two ways in, because neither alone is trustworthy. The click is the honest
+    // signal but it can only be observed indirectly (focus moving into the frame),
+    // and that cannot be reproduced in a headless test. The timer is the one that
+    // can be proven. Whichever fires first wins; arming twice is harmless.
+    focusHook=function(){
+      if(document.activeElement===f){
+        arm(); window.removeEventListener("blur",focusHook); focusHook=null;
+      }
+    };
+    window.addEventListener("blur",focusHook);
+    function arm(){ if(shell.contains(f)) igReplay.classList.add("armed"); }
+    armTimer=setTimeout(arm, ARM_MS);
     // Instagram wraps the whole media area in <a target="_blank">, so a click on a
     // finished clip jumps to instagram.com. No allow-popups / allow-top-navigation
     // in the sandbox makes every one of those links inert; playback is untouched.
     f.setAttribute("sandbox","allow-scripts allow-same-origin allow-presentation");
     shell.appendChild(f);
-    return "Instagram embed, chrome cropped and click-through disabled. Its player has no JavaScript API: one click to start, it loops, and it never reports the end. Use Replay or ✕.";
+    return "Instagram embed, chrome cropped and click-through disabled. Its player has no JavaScript API and never reports the end, and the play button on its own end card is a dead link to instagram.com - the round Play again button in the middle of the frame is ours and does work.";
   },
 
   youtube:function(clip,info){
@@ -1131,25 +1180,10 @@ function mount(clip){
   shell.title = pNote.textContent;
   requestAnimationFrame(syncWidth);
 }
-/* a dead reel never reaches the room: mark it, drop it, and quietly play another */
-function rerollPastDead(id){
-  // remembered for this tab only, so the list on screen keeps its real size
-  if(id) sessionBad[id]=1;
-  var wasCurrent=current;
-  if(++rerolls>6 || !CLIPS.length){
-    showError("Instagram is being slow",
-      CLIPS.length ? "Several clips in a row did not come up. That is usually the connection rather than the clips - press Replay, or close and spin again."
-                   : "Nothing in the list would load - check links.txt.");
-    return;
-  }
-  var pick=CLIPS[randInt(CLIPS.length)], n=0;
-  while(n++<20 && (pick===wasCurrent || sessionBad[(kindOf(pick)||{}).id])) pick=CLIPS[randInt(CLIPS.length)];
-  openPlayer(pick);
-}
 
 function openPlayer(clip){
   if(!clip) return;
-  current=clip;
+  current=clip; retriedOnce=false;
   pTopic.textContent=clip.topic||"";
   pTitle.textContent=clip.untitled ? ("Clip "+pad(clip.id)) : (clip.title||"");
   pCreator.textContent=clip.creator?("by "+clip.creator):"";
@@ -1247,6 +1281,7 @@ pFind.addEventListener("keydown",function(e){
 spinBtn.addEventListener("click",spin);
 closeBtn.addEventListener("click",closePlayer);
 replayBtn.addEventListener("click",replay);
+igReplay.addEventListener("click",replay);
 endReplay.addEventListener("click",replay);
 fsBtn.addEventListener("click",toggleFS);
 againBtn.addEventListener("click",function(){ closePlayer(); setTimeout(spin,180); });
