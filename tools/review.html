@@ -34,6 +34,19 @@ header{flex:none}
 .ttl small{display:block;font-size:10.5px;letter-spacing:1.3px;text-transform:uppercase;
   color:var(--faint);font-weight:750}
 .pos{font-family:var(--mono);font-size:12.5px;color:var(--dim);flex:none}
+.live{flex:none;display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:750;
+  letter-spacing:.9px;text-transform:uppercase;padding:3px 8px;border-radius:99px;
+  border:1px solid var(--line2);color:var(--faint);background:rgba(255,255,255,.04)}
+.live i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.live.on{color:var(--ok);border-color:rgba(49,224,192,.4);background:rgba(49,224,192,.10)}
+.live.on i{animation:pulse 1.9s ease-in-out infinite}
+.live.warn{color:var(--gold);border-color:rgba(255,200,97,.4);background:rgba(255,200,97,.10)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.flash{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);
+  z-index:70;padding:9px 15px;border-radius:99px;font-size:12.5px;font-weight:650;
+  background:rgba(13,20,36,.97);border:1px solid var(--line2);color:var(--txt);
+  box-shadow:0 16px 40px -16px #000;opacity:0;pointer-events:none;transition:opacity .22s ease}
+.flash.show{opacity:1}
 .pbar{height:4px;border-radius:99px;background:rgba(255,255,255,.10);margin:9px 0 4px;overflow:hidden}
 .pbar i{display:block;height:100%;width:0;border-radius:99px;
   background:linear-gradient(90deg,var(--ok),var(--blue));transition:width .3s ease}
@@ -127,6 +140,7 @@ a.btnlink{text-decoration:none}
     <div class="row">
       <div class="mk">&#9986;</div>
       <div class="ttl">Review the clips<small>drops never touch links.txt</small></div>
+      <div class="live" id="live" title="Sharing status"><i></i><span id="liveTxt">local</span></div>
       <div class="pos" id="pos">&mdash;</div>
     </div>
     <div class="pbar"><i id="pfill"></i></div>
@@ -190,6 +204,8 @@ a.btnlink{text-decoration:none}
   </footer>
 </div>
 
+<div class="flash" id="flash"></div>
+
 <div class="sheet" id="sheet">
   <div class="inner">
     <h2 id="shTitle">Your new list</h2>
@@ -221,6 +237,7 @@ a.btnlink{text-decoration:none}
   </div>
 </div>
 
+<script src="sync-config.js" onerror="window.SYNC=null"></script>
 <script>
 (function(){
 "use strict";
@@ -246,13 +263,145 @@ var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$(
     bDrop=$("bDrop"), bKeep=$("bKeep"), bSkip=$("bSkip"), bUndo=$("bUndo"),
     donePanel=$("donePanel"), doneText=$("doneText"),
     bExport=$("bExport"), bReset=$("bReset"), sheet=$("sheet"), out=$("out"),
-    bCopy=$("bCopy"), bDl=$("bDl"), bClose=$("bClose"), shTitle=$("shTitle"), shLede=$("shLede"), kb=$("kb");
+    bCopy=$("bCopy"), bDl=$("bDl"), bClose=$("bClose"), shTitle=$("shTitle"), shLede=$("shLede"), kb=$("kb"),
+    live=$("live"), liveTxt=$("liveTxt"), flash=$("flash");
 
 var RAW = "";          // links.txt exactly as it was fetched
 var ITEMS = [];        // {id, url, line, n}  - only the live (uncommented) links
 var STATE = {};        // id -> "keep" | "drop" | "skip"
 var HIST  = [];        // ids, newest last, for Undo
 var cur = null, frame = null, msgHook = null;
+var curVerdict = null;     // what the clip on screen was marked as when it was mounted
+var WORD = {drop:"dropped", keep:"kept", skip:"skipped"};
+
+/* =====================================================================
+   SHARING
+   ---------------------------------------------------------------------
+   Optional, and the page is fully usable without it. When sync-config.js
+   carries a Firebase Realtime Database address, decisions live there
+   instead of only in this browser, so two phones see each other's drops
+   as they happen.
+
+   No SDK. The Realtime Database speaks plain REST, and it streams changes
+   over EventSource, which is a browser built-in - so there is no library
+   to load, no version to rot, and nothing to break when Google renames a
+   bundle. If EventSource cannot be used, it falls back to asking every
+   few seconds; either way the page behaves the same.
+
+   Local storage is still written on every decision. It is the cache that
+   makes a cold start instant and the fallback when the network is gone.
+   ===================================================================== */
+var SYNC = {
+  on:false, base:"", es:null, poll:null, tries:0,
+  pending:{},        // written here, not yet echoed back by the server
+  ready:false
+};
+(function(){
+  var c = window.SYNC;
+  if(!c || !c.db) return;
+  var db = String(c.db).replace(/\/+$/,"");
+  // http is allowed only so this can be exercised against a local stand-in;
+  // on the live site the page itself is https, so the browser blocks an http
+  // address as mixed content long before this line matters
+  if(!/^https?:\/\/[^\/]+/.test(db)) return;
+  SYNC.on = true;
+  SYNC.base = db + "/breaktime/" + encodeURIComponent(c.room || "default") + "/decisions";
+})();
+
+function setLive(cls, text){
+  live.className = "live" + (cls?" "+cls:"");
+  liveTxt.textContent = text;
+}
+var flashT=null;
+function say(msg){
+  flash.textContent = msg; flash.classList.add("show");
+  clearTimeout(flashT); flashT = setTimeout(function(){ flash.classList.remove("show"); }, 2200);
+}
+
+/* apply a snapshot or a partial update coming from the server */
+function fromServer(obj, partial){
+  var next = partial ? STATE : {};
+  if(!partial){ next = {}; }
+  if(obj && typeof obj==="object"){
+    for(var k in obj){
+      if(obj[k]===null) delete next[k]; else next[k]=obj[k];
+    }
+  }
+  // anything written here and not yet echoed stays on top, so a decision
+  // never appears to bounce back while the round trip is in flight
+  for(var p in SYNC.pending){
+    if(next[p] === SYNC.pending[p]) delete SYNC.pending[p];
+    else next[p] = SYNC.pending[p];
+  }
+  // Compare against the verdict this clip had when it was put on screen, not
+  // against "has any verdict". A skipped clip comes round again still carrying
+  // its skip, so the second test would make it jump away on every message the
+  // server sends.
+  var nowCur = cur ? (next[cur.id] || null) : null;
+  var moved  = cur && nowCur !== curVerdict && (nowCur === "drop" || nowCur === "keep");
+  STATE = next;
+  saveLocal();
+  paintCounts();
+  if(moved){
+    say("Clip " + pad(cur.n) + " was " + WORD[nowCur] + " on the other phone");
+    show();
+  }else if(!cur && ITEMS.length && undecided().length){
+    show();   // an undo on the other phone can put work back on the queue
+  }
+}
+
+function syncSend(patch){
+  if(!SYNC.on) return;
+  for(var k in patch){ if(patch[k]!==null) SYNC.pending[k]=patch[k]; }
+  fetch(SYNC.base + ".json", {
+    method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(patch)
+  }).catch(function(){
+    setLive("warn","offline");
+    // the decision is safe in local storage; the next stream snapshot reconciles
+  });
+}
+function syncClear(cb){
+  if(!SYNC.on){ cb&&cb(); return; }
+  fetch(SYNC.base + ".json", {method:"DELETE"}).then(function(){ cb&&cb(); },
+                                                    function(){ cb&&cb(); });
+}
+function startPoll(){
+  if(SYNC.poll) return;
+  setLive("warn","polling");
+  SYNC.poll = setInterval(function(){
+    fetch(SYNC.base + ".json?t=" + Date.now(), {cache:"no-store"})
+      .then(function(r){ return r.json(); })
+      .then(function(o){ setLive("on","live"); fromServer(o||{}, false); })
+      .catch(function(){ setLive("warn","offline"); });
+  }, 4000);
+}
+function startStream(){
+  if(!SYNC.on){ setLive("", "local"); return; }
+  setLive("warn","connecting");
+  if(typeof EventSource === "undefined"){ startPoll(); return; }
+  var es;
+  try{ es = new EventSource(SYNC.base + ".json"); }
+  catch(e){ startPoll(); return; }
+  SYNC.es = es;
+  es.addEventListener("put", function(ev){
+    var d; try{ d = JSON.parse(ev.data); }catch(e){ return; }
+    setLive("on","live"); SYNC.tries = 0;
+    if(d.path === "/") fromServer(d.data || {}, false);
+    else { var o={}; o[d.path.replace(/^\//,"")] = d.data; fromServer(o, true); }
+  });
+  es.addEventListener("patch", function(ev){
+    var d; try{ d = JSON.parse(ev.data); }catch(e){ return; }
+    setLive("on","live");
+    fromServer(d.data || {}, true);
+  });
+  es.onerror = function(){
+    // EventSource retries on its own; after a few failures fall back to
+    // asking, which works anywhere a plain fetch does
+    SYNC.tries++;
+    setLive("warn","reconnecting");
+    if(SYNC.tries >= 3){ try{ es.close(); }catch(e){} SYNC.es=null; startPoll(); }
+  };
+}
 
 /* ---------------- storage ---------------- */
 function load(){
@@ -262,7 +411,7 @@ function load(){
     HIST  = s.hist  || [];
   }catch(e){ STATE={}; HIST=[]; }
 }
-function save(){
+function saveLocal(){
   try{
     localStorage.setItem(KEY, JSON.stringify({state:STATE, hist:HIST, at:Date.now()}));
   }catch(e){ /* private mode - reviewing still works, it just will not resume */ }
@@ -421,6 +570,7 @@ function show(){
   if(!q.length){ finished(); return; }
   unfinish();
   cur = q[0];
+  curVerdict = STATE[cur.id] || null;
   var c = counts();
   num.innerHTML = "Clip " + pad(cur.n) +
     (STATE[cur.id]==="skip" ? "<em>skipped earlier</em>" : "");
@@ -431,28 +581,34 @@ function show(){
 }
 function decide(v){
   if(!cur) return;
-  STATE[cur.id] = v;
-  HIST.push(cur.id);
+  var id = cur.id, patch = {};
+  STATE[id] = v;
+  HIST.push(id);
   if(HIST.length > 400) HIST.shift();
-  save(); show();
+  saveLocal();
+  patch[id] = v; syncSend(patch);
+  show();
 }
 function undo(){
   var id = HIST.pop();
   if(!id) return;
   delete STATE[id];
-  save();
+  saveLocal();
+  // undoing a shared decision has to travel too, or the other phone keeps
+  // skipping a clip this one has just put back
+  var patch = {}; patch[id] = null; syncSend(patch);
   // put the undone clip straight back in front, rather than wherever the queue
   // would otherwise have placed it
   var i, it=null;
   for(i=0;i<ITEMS.length;i++) if(ITEMS[i].id===id){ it=ITEMS[i]; break; }
   paintCounts();
-  if(it){ unfinish(); cur=it; num.innerHTML="Clip "+pad(it.n)+"<em>back for another look</em>";
+  if(it){ unfinish(); cur=it; curVerdict=null; num.innerHTML="Clip "+pad(it.n)+"<em>back for another look</em>";
           num.setAttribute("data-clip", pad(it.n)); mount(it); }
   else show();
 }
 function finished(){
   clearStage();
-  cur = null;
+  cur = null; curVerdict = null;
   var c = counts();
   num.textContent = "";
   // hide the stage rather than removing it - Undo has to be able to bring a
@@ -553,8 +709,12 @@ bDl.addEventListener("click", function(){
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
 });
 bReset.addEventListener("click", function(){
-  if(!confirm("Forget every decision and start from clip 1?\n\nThis only clears this page's own progress. links.txt is untouched.")) return;
-  STATE={}; HIST=[]; save(); location.reload();
+  var msg = SYNC.on
+    ? "Start over for EVERYONE?\n\nThis clears the shared list, so the other phone loses its progress too. links.txt is untouched."
+    : "Forget every decision and start from clip 1?\n\nThis only clears this page's own progress. links.txt is untouched.";
+  if(!confirm(msg)) return;
+  STATE={}; HIST=[]; SYNC.pending={}; saveLocal();
+  syncClear(function(){ location.reload(); });
 });
 
 /* ---------------- go ---------------- */
@@ -572,7 +732,8 @@ fetch(LIST_URL, {cache:"no-store"})
     for(i=0;i<ITEMS.length;i++) seen[ITEMS[i].id]=1;
     for(var k in STATE) if(!seen[k]) delete STATE[k];
     HIST = HIST.filter(function(id){ return seen[id]; });
-    show();
+    show();                 // the cached view paints immediately
+    startStream();          // and the shared one lands on top of it
   })
   .catch(function(e){
     num.textContent = "Could not read links.txt";
