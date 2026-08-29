@@ -36,6 +36,9 @@ jobs:
       - name: Process every pending recording
         env:
           OPENAI_API_KEY: ${{ secrets.CLIPS }}
+          # optional: adds the clip's description and its comments, so a note
+          # written without dictation has evidence instead of memory
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE }}
         run: python3 .github/scripts/voice_note.py
 
       - name: Commit whatever changed

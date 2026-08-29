@@ -125,6 +125,14 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
   stroke-linecap:round;stroke-linejoin:round}
 .notewrap .mic.rec{background:var(--no);color:#2a0308;border-color:transparent;animation:mic 1.2s ease-in-out infinite}
 .notewrap .mic.busy{opacity:.55;pointer-events:none}
+/* Writes the note for you from the clip itself. Beside the microphone because
+   it is the same decision: talk, or do not talk. */
+.notewrap .wand{position:absolute;right:46px;top:8px;width:32px;height:32px;border-radius:10px;
+  display:grid;place-items:center;cursor:pointer;
+  border:1px solid rgba(77,141,255,.45);background:rgba(77,141,255,.14);color:var(--blue)}
+.notewrap .wand svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;
+  stroke-linecap:round;stroke-linejoin:round}
+.notewrap .wand.busy{opacity:.55;pointer-events:none}
 /* while it is listening, something has to move - otherwise there is no way to
    know whether the microphone is actually hearing you */
 .recbar{position:absolute;left:8px;right:8px;bottom:8px;display:flex;align-items:center;gap:9px;
@@ -360,6 +368,9 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
           placeholder="Note for this clip &mdash; shown when it ends. Type it, or press the microphone and just talk."></textarea>
         <button class="sv" data-save type="button" title="Save the note" aria-label="Save note">
           <svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg>
+        </button>
+        <button class="wand" data-auto type="button" title="Write one from the clip itself" aria-label="Write it for me">
+          <svg viewBox="0 0 24 24"><path d="M5 3v4"/><path d="M3 5h4"/><path d="M17 15v4"/><path d="M15 17h4"/><path d="M12.5 4.5l2.2 4.8 4.8 2.2-4.8 2.2-2.2 4.8-2.2-4.8L5.5 11.5l4.8-2.2z"/></svg>
         </button>
         <button class="mic" data-mic type="button" title="Talk instead of typing" aria-label="Record a voice note">
           <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
@@ -1016,6 +1027,7 @@ function noteTools(box, getClip){
       timer  = box.querySelector("[data-timer]"),
       level  = box.querySelector("[data-level]"),
       sendBt = box.querySelector("[data-send]"),
+      wandBt = box.querySelector("[data-auto]"),
       cancel = box.querySelector("[data-cancel]");
   // in a list row the status line sits inside the row; in the deck it is a
   // sibling of the whole button block, so fall back to the page-level one
@@ -1173,7 +1185,58 @@ function noteTools(box, getClip){
     if(rec && rec.state==="recording"){ discard=true; rec.stop(); }
   });
 
-  /* ---- hand it to GitHub, then wait for the Action to answer ---- */
+  /* Nothing to say about this one - let the workflow read the clip's own page
+     and the comments under it and write the note from those. It is the same
+     round trip as a recording, so it lands the same way. */
+  wandBt.addEventListener("click", function(e){
+    e.stopPropagation();
+    var clip = getClip();
+    if(!clip){ say("Open a clip first.", "bad"); return; }
+    if(!token()){
+      say("This needs the GitHub token from Export / publish - that is what asks for the note.", "bad");
+      return;
+    }
+    if(rec && rec.state==="recording"){ discard=true; rec.stop(); }
+    pauseClip();
+    var steer = clean(note.value);
+    if(steer && !confirm("Write a new note from the clip itself?\n\n" +
+        "What is in the box is passed on as a steer, and then replaced by what comes back.")) return;
+    wandBt.classList.add("busy"); micBtn.classList.add("busy");
+    say("Reading the clip and what people said underneath it…", "", true);
+    // never a zero-byte file: an empty steer is a blank line, not nothing
+    commit(clip.id, clip.id + ".auto.voice.txt", b64(steer + "\n"), "Note written from the clip")
+      .then(function(r){
+        if(!r.ok) return r.text().then(function(t){
+          throw new Error("could not ask for it (HTTP "+r.status+") "+t.slice(0,80)); });
+        say("Asked for it. Writing it up — usually under a minute…", "", true);
+        beginWait(clip.id);
+      }).catch(function(err){
+        say(String(err.message||err), "bad");
+        wandBt.classList.remove("busy"); micBtn.classList.remove("busy");
+      });
+  });
+
+  /* ---- hand it to GitHub, then wait for the Action to answer ----
+
+     Everything the workflow needs is in the file NAME: the clip id, and the
+     flags after it. One path in, whether it carries a recording or a request to
+     write the note from the clip itself. */
+  function commit(id, name, b64, why){
+    return gh("contents/voice-in/"+name+"?ref="+BRANCH).then(function(r){
+      return r.ok ? r.json().then(function(j){ return j.sha; }) : null;
+    }, function(){ return null; }).then(function(sha){
+      var body={message:why+" for "+id, content:b64, branch:BRANCH};
+      if(sha) body.sha=sha;
+      return gh("contents/voice-in/"+name, {method:"PUT", body:JSON.stringify(body)});
+    });
+  }
+  function beginWait(id){
+    sentAt = Date.now();
+    // from this moment the file on the site is out of date, so the play button
+    // goes away everywhere - in the deck and in every open row
+    PENDING[id] = sentAt; syncNotes();
+    await_(id);
+  }
   function send(id, blob, type){
     var ext = type.indexOf("mp4")>-1 ? "mp4" : type.indexOf("ogg")>-1 ? "ogg" : "webm";
     // ".voice." asks the workflow for the spoken version too, which is always
@@ -1183,26 +1246,16 @@ function noteTools(box, getClip){
     var reader=new FileReader();
     reader.onload=function(){
       var b64=String(reader.result).split(",")[1]||"";
-      gh("contents/voice-in/"+name+"?ref="+BRANCH).then(function(r){
-        return r.ok ? r.json().then(function(j){ return j.sha; }) : null;
-      }, function(){ return null; }).then(function(sha){
-        var body={message:"Dictated note for "+id, content:b64, branch:BRANCH};
-        if(sha) body.sha=sha;
-        return gh("contents/voice-in/"+name, {method:"PUT", body:JSON.stringify(body)});
-      }).then(function(r){
+      commit(id, name, b64, "Dictated note").then(function(r){
         if(!r.ok) return r.text().then(function(t){
           throw new Error("could not send it (HTTP "+r.status+") "+t.slice(0,80)); });
-        sentAt = Date.now();
-        // from this moment the file on the site is out of date, so the button
-        // goes away everywhere - in the deck and in every open row
-        PENDING[id] = sentAt; syncNotes();
         say("Sent. Writing it up — usually under a minute…", "", true);
-        await_(id);
+        beginWait(id);
       }).catch(function(e){
-        say(String(e.message||e), "bad"); micBtn.classList.remove("busy");
+        say(String(e.message||e), "bad"); micBtn.classList.remove("busy"); wandBt.classList.remove("busy");
       });
     };
-    reader.onerror=function(){ say("Could not read the recording.", "bad"); micBtn.classList.remove("busy"); };
+    reader.onerror=function(){ say("Could not read the recording.", "bad"); micBtn.classList.remove("busy"); wandBt.classList.remove("busy"); };
     reader.readAsDataURL(blob);
   }
   function await_(id){
@@ -1210,7 +1263,7 @@ function noteTools(box, getClip){
     var poll = setInterval(function(){
       n++;
       if(n > 40){
-        clearInterval(poll); micBtn.classList.remove("busy");
+        clearInterval(poll); micBtn.classList.remove("busy"); wandBt.classList.remove("busy");
         delete PENDING[id]; syncNotes();
         say("No answer after three minutes. Look at the Actions tab on GitHub - the run "
             + "itself will say what went wrong.", "bad"); return;
@@ -1218,7 +1271,7 @@ function noteTools(box, getClip){
       if(n === 6) say("Still working\u2026 the first run of the day takes longer.", "", true);
       pullAdded(function(){
         if(NOTES[id] && NOTES[id] !== before){
-          clearInterval(poll); micBtn.classList.remove("busy");
+          clearInterval(poll); micBtn.classList.remove("busy"); wandBt.classList.remove("busy");
           var clip=getClip();
           if(clip && clip.id===id){
             saved = clean(NOTES[id]);      // this is now the baseline, not an edit
@@ -1382,6 +1435,8 @@ function paintRows(){
         ' placeholder="Note shown when this clip ends. Type it, or press the microphone."></textarea>' +
         '<button class="sv" data-save type="button" title="Save">' +
           '<svg viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></svg></button>' +
+        '<button class="wand" data-auto type="button" title="Write one from the clip itself">' +
+          '<svg viewBox="0 0 24 24"><path d="M5 3v4"/><path d="M3 5h4"/><path d="M17 15v4"/><path d="M15 17h4"/><path d="M12.5 4.5l2.2 4.8 4.8 2.2-4.8 2.2-2.2 4.8-2.2-4.8L5.5 11.5l4.8-2.2z"/></svg>' +
         '<button class="mic" data-mic type="button" title="Talk instead of typing">' +
           '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/>' +
           '<path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>' +

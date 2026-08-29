@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """Runs inside GitHub Actions, where the OpenAI key lives.
 
-For every recording waiting in voice-in/:
-  1. transcribe it (any language - it is detected)
+For every job waiting in voice-in/:
+  0. gather what is known about the clip - title, and with a YouTube key its
+     description, tags and most-liked comments (the comments usually quote the
+     joke, which is what stops the writing from being guesswork)
+  1. transcribe the recording, if there is one (any language - it is detected)
   2. rewrite it as short, natural American English with a couple of emoji
   3. put the result in the shared database, so every phone sees it at once
   4. if the recording asked for it, make the spoken version as audio/<id>.mp3
@@ -20,6 +23,7 @@ AUDIO  = os.path.join(ROOT, "audio")
 CONFIG = os.path.join(ROOT, "tools", "sync-config.js")
 LINKS  = os.path.join(ROOT, "links.txt")
 KEY    = os.environ.get("OPENAI_API_KEY", "").strip()
+YTKEY  = os.environ.get("YOUTUBE_API_KEY", "").strip()   # optional: adds comments
 
 TRANSCRIBE = "gpt-4o-transcribe"
 WRITER     = "gpt-4o-mini"
@@ -95,29 +99,120 @@ def title(vid):
         return ""
 
 
-def polish(said, cfg, clip=""):
+def get(url, timeout=20):
+    req = urllib.request.Request(url, headers={"User-Agent": "break-time/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def evidence(vid):
+    """Everything that can be known about a clip without watching it.
+
+    The title always comes back - oEmbed needs no key at all. Description, tags
+    and comments need a YouTube Data API key; without one the note is written
+    from the title alone, which is thinner but never an error.
+
+    Captions are deliberately not attempted. YouTube now answers the timedtext
+    endpoint with an empty body for every format, from a browser and from a
+    server alike - measured, not assumed.
+    """
+    ev = {"title": "", "channel": "", "desc": "", "tags": [], "comments": []}
+    try:
+        o = get("https://www.youtube.com/oembed?format=json&url="
+                + urllib.parse.quote("https://www.youtube.com/watch?v=" + vid, safe=""))
+        ev["title"] = (o.get("title") or "").strip()
+        ev["channel"] = (o.get("author_name") or "").strip()
+    except Exception as e:
+        print("   (no title for %s: %s)" % (vid, e))
+    if not YTKEY:
+        return ev
+    try:
+        d = get("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=%s&key=%s"
+                % (vid, YTKEY))
+        items = d.get("items") or []
+        if items:
+            sn = items[0]["snippet"]
+            ev["title"] = sn.get("title") or ev["title"]
+            ev["channel"] = sn.get("channelTitle") or ev["channel"]
+            ev["desc"] = (sn.get("description") or "").strip()
+            ev["tags"] = sn.get("tags") or []
+    except Exception as e:
+        print("   (no video details: %s)" % e)
+    try:
+        d = get("https://www.googleapis.com/youtube/v3/commentThreads"
+                "?part=snippet&order=relevance&maxResults=25&textFormat=plainText"
+                "&videoId=%s&key=%s" % (vid, YTKEY))
+        for it in (d.get("items") or []):
+            c = it["snippet"]["topLevelComment"]["snippet"]
+            txt = re.sub(r"\s+", " ", (c.get("textDisplay") or "")).strip()
+            if 4 <= len(txt) <= 220:
+                ev["comments"].append((c.get("likeCount") or 0, txt))
+        ev["comments"].sort(reverse=True)
+        ev["comments"] = [t for _, t in ev["comments"][:15]]
+    except Exception as e:
+        print("   (no comments: %s)" % e)
+    return ev
+
+
+def brief(ev):
+    """The evidence, as plain lines a model can read. Empty when there is none."""
+    out = []
+    if ev["title"]:   out.append("Clip title: " + ev["title"])
+    if ev["channel"]: out.append("Channel: " + ev["channel"])
+    if ev["desc"]:
+        d = re.sub(r"https?://\S+", "", ev["desc"])
+        d = re.sub(r"\s+", " ", d).strip()[:400]
+        if d: out.append("Description: " + d)
+    if ev["tags"]:    out.append("Tags: " + ", ".join(ev["tags"][:12]))
+    if ev["comments"]:
+        out.append("What people said underneath it, most liked first:")
+        out += ["- " + c for c in ev["comments"]]
+    return "\n".join(out)
+
+
+COMMON = (
+    "You write the one-line note a lecturer plays to the room after a short comedy clip "
+    "during a class break.\n"
+    "Natural, idiomatic American English - the way a person actually talks, not written "
+    "prose.\n"
+    "HARD LIMIT: about %d words, so it takes roughly %d seconds to say.\n"
+    "Add one or two emoji where they genuinely land. Do not decorate every sentence.\n"
+    "It is read out loud to a room of university students, so keep it clean.\n"
+    "Never mention the title, the comments, or that you were shown anything. Never describe "
+    "the clip as a clip.\n"
+    "Reply with the note itself and nothing else - no quotes, no preamble.")
+
+WRITE_SAID = (COMMON + "\n\n"
+    "The input is dictated, may be English or Persian, and may ramble. Rewrite it, fix all "
+    "grammar, and keep the speaker's meaning and their sense of humour. If the dictation was "
+    "long, keep only the point worth hearing.\n"
+    "You may also be shown what is known about the clip. Use it to resolve what the speaker "
+    "means - names, characters, the situation - and answer plainly. If they ask something the "
+    "evidence settles, just give the answer.")
+
+WRITE_AUTO = (COMMON + "\n\n"
+    "Nobody dictated anything this time. Write the note yourself, from the evidence below.\n"
+    "The comments are the strongest signal: people quote the line they found funny, so the "
+    "joke is usually sitting in them in plain sight. Trust them over your own memory.\n"
+    "Do NOT invent a detail the evidence does not support. If the evidence is thin, say "
+    "something true and general about the humour rather than guessing at what happened.\n"
+    "Write it as the lecturer's own aside to the class, not as a summary.")
+
+
+def ask(said, clip, auto):
+    if auto:
+        return ((clip or "There is nothing known about this clip.")
+                + (("\n\nThe lecturer added: " + said) if said else ""))
+    return ((clip + "\n\n") if clip else "") + "What was said: " + said
+
+
+def polish(said, cfg, clip="", auto=False):
     words = round(cfg["seconds"] * 2.6)
     body = json.dumps({
         "model": cfg["writer"], "temperature": 0.7,
         "messages": [
-            {"role": "system", "content":
-                "You write the one-line note a lecturer plays after a short comedy clip during a "
-                "class break. The input is dictated, may be English or Persian, and may ramble.\n"
-                "Rewrite it as natural, idiomatic American English - the way a person actually "
-                "talks, not written prose. Fix all grammar. Keep the speaker's meaning and their "
-                "sense of humour.\n"
-                "HARD LIMIT: about %d words, so it takes roughly %d seconds to say. If the "
-                "dictation was long, keep only the point worth hearing.\n"
-                "Add one or two emoji where they genuinely land. Do not decorate every sentence.\n"
-                "It is read out loud to a room of university students, so keep it clean.\n"
-                "You may be given the clip's title. Use it to work out who or what the "
-                "speaker means - names, characters, the situation - and answer plainly. If "
-                "they ask something the title settles, just say the answer. Never quote the "
-                "title back, never describe the clip, and never mention that you were told it.\n"
-                "Reply with the note itself and nothing else - no quotes, no preamble."
-                % (words, cfg["seconds"])},
-            {"role": "user", "content":
-                (("The clip playing is titled: %s\n\n" % clip) if clip else "") + said}]}).encode()
+            {"role": "system", "content": (WRITE_AUTO if auto else WRITE_SAID) % (words, cfg["seconds"])},
+            {"role": "user", "content": ask(said, clip, auto)}]}).encode()
     raw = post("https://api.openai.com/v1/chat/completions", body,
                {"Authorization": "Bearer " + KEY, "Content-Type": "application/json"})
     txt = json.loads(raw)["choices"][0]["message"]["content"].strip()
@@ -208,22 +303,35 @@ def main():
     for name in jobs:
         path = os.path.join(INBOX, name)
         stem = os.path.splitext(name)[0]
-        # "<id>.webm" makes text only; "<id>.voice.webm" also makes the spoken file
-        want_audio = stem.endswith(".voice")
-        vid = stem[:-6] if want_audio else stem
-        print("\n== %s (audio: %s)" % (vid, want_audio))
+        # The name carries the instructions. A video id never contains a dot, so
+        # everything after the first one is a flag:
+        #   <id>.webm            text only, from the recording
+        #   <id>.voice.webm      and the spoken version
+        #   <id>.auto.voice.txt  no recording - write it from the clip itself
+        bits = stem.split(".")
+        vid, flags = bits[0], set(bits[1:])
+        want_audio = "voice" in flags
+        auto = "auto" in flags
+        print("\n== %s (audio: %s, written for you: %s)" % (vid, want_audio, auto))
         try:
             if name.lower().endswith(".txt"):
+                # in auto mode this is an optional steer, not the note
                 said = open(path, encoding="utf-8").read().strip()
-                if not said:
+                if not said and not auto:
                     raise RuntimeError("the text file was empty")
-                print("   read : %s" % said[:110])
+                if said: print("   read : %s" % said[:110])
             else:
                 said = transcribe(path, cfg["transcribe"])
                 if not said:
                     raise RuntimeError("nothing was heard in the recording")
                 print("   heard: %s" % said[:110])
-            note = polish(said, cfg, title(vid))
+            ev = evidence(vid)
+            seen = brief(ev)
+            print("   about: %s%s" % (ev["title"][:70],
+                                      " (+%d comments)" % len(ev["comments"]) if ev["comments"] else ""))
+            if auto and not seen:
+                raise RuntimeError("nothing is known about this clip, so there is nothing to write from")
+            note = polish(said, cfg, seen, auto)
             print("   note : %s" % note[:110])
             firebase(cfg, "notes", vid, note)
             relabel(vid, note)
