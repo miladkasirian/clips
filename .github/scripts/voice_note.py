@@ -12,7 +12,7 @@ Nothing here is clever. It is deliberately linear so that a failure on one clip
 cannot take the others down with it, and so that a half-finished run leaves the
 recording in place to be tried again rather than silently losing it.
 """
-import base64, json, os, re, sys, urllib.request, urllib.error
+import base64, json, os, re, sys, urllib.parse, urllib.request, urllib.error
 
 ROOT   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 INBOX  = os.path.join(ROOT, "voice-in")
@@ -76,7 +76,26 @@ def transcribe(path, model):
     return (json.loads(raw).get("text") or "").strip()
 
 
-def polish(said, cfg):
+def title(vid):
+    """What the clip is actually about, in YouTube's own words.
+
+    WHY: dictation is full of things only a person watching can resolve - "what
+    is this dog called?", "the fat one", "her". Without the title the rewrite has
+    nothing to attach those to and answers with a shrug. oEmbed gives the title
+    with no key, no account and one request, and a failure here is not worth
+    stopping for - the note is simply written without the extra context.
+    """
+    url = ("https://www.youtube.com/oembed?format=json&url="
+           + urllib.parse.quote("https://www.youtube.com/watch?v=" + vid, safe=""))
+    try:
+        with urllib.request.urlopen(url, timeout=15) as r:
+            return (json.loads(r.read()).get("title") or "").strip()
+    except Exception as e:
+        print("   (no title for %s: %s)" % (vid, e))
+        return ""
+
+
+def polish(said, cfg, clip=""):
     words = round(cfg["seconds"] * 2.6)
     body = json.dumps({
         "model": cfg["writer"], "temperature": 0.7,
@@ -91,9 +110,14 @@ def polish(said, cfg):
                 "dictation was long, keep only the point worth hearing.\n"
                 "Add one or two emoji where they genuinely land. Do not decorate every sentence.\n"
                 "It is read out loud to a room of university students, so keep it clean.\n"
+                "You may be given the clip's title. Use it to work out who or what the "
+                "speaker means - names, characters, the situation - and answer plainly. If "
+                "they ask something the title settles, just say the answer. Never quote the "
+                "title back, never describe the clip, and never mention that you were told it.\n"
                 "Reply with the note itself and nothing else - no quotes, no preamble."
                 % (words, cfg["seconds"])},
-            {"role": "user", "content": said}]}).encode()
+            {"role": "user", "content":
+                (("The clip playing is titled: %s\n\n" % clip) if clip else "") + said}]}).encode()
     raw = post("https://api.openai.com/v1/chat/completions", body,
                {"Authorization": "Bearer " + KEY, "Content-Type": "application/json"})
     txt = json.loads(raw)["choices"][0]["message"]["content"].strip()
@@ -199,7 +223,7 @@ def main():
                 if not said:
                     raise RuntimeError("nothing was heard in the recording")
                 print("   heard: %s" % said[:110])
-            note = polish(said, cfg)
+            note = polish(said, cfg, title(vid))
             print("   note : %s" % note[:110])
             firebase(cfg, "notes", vid, note)
             relabel(vid, note)

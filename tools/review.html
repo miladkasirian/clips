@@ -1083,13 +1083,9 @@ function noteTools(box, getClip){
   /* Recording over the top of a playing clip records the clip. Stop it first -
      in the deck that is the transport, in a row it is the row's own iframe. */
   function pauseClip(){
-    try{ if(box===deckBox && TR && TR.cmd) TR.cmd("pauseVideo"); }catch(e){}
-    try{
-      var host = box.closest(".row2");
-      var f = host && host.querySelector("iframe");
-      if(f) f.contentWindow.postMessage(JSON.stringify(
-        {event:"command",func:"pauseVideo",args:[],id:1,channel:"widget"}),"*");
-    }catch(e){}
+    if(box === deckBox){ pauseDeck(); return; }
+    var host = box.closest(".row2");
+    ytPause(host && host.querySelector("iframe"));
   }
   function startRec(){
     var clip=getClip();
@@ -1311,7 +1307,31 @@ function aisay(msg, cls, busy){
    ===================================================================== */
 var listKind = "keep", openRow = null;
 
-function sheetOpen(el){ el.classList.add("open"); }
+/* Anything that covers the clip - a sheet, or a recording about to start - stops
+   it first. Nothing here ever starts it again: if you want it playing you press
+   play yourself. */
+function ytPause(f){
+  if(!f || !f.contentWindow) return;
+  try{
+    // the player only takes commands from a window it has been told is listening
+    f.contentWindow.postMessage(JSON.stringify({event:"listening",id:1,channel:"widget"}),"*");
+    f.contentWindow.postMessage(JSON.stringify(
+      {event:"command",func:"pauseVideo",args:[],id:1,channel:"widget"}),"*");
+  }catch(e){}
+}
+function pauseDeck(){
+  try{
+    // send it regardless of what we think the state is - the state arrives by
+    // message and may not have caught up, and a pause on a paused clip is free
+    if(TR && TR.cmd){ TR.cmd("pauseVideo"); TR.playing = false; paintTR(); }
+  }catch(e){}
+}
+function pauseAll(){
+  pauseDeck();
+  var fs = document.querySelectorAll("#rows iframe");
+  for(var i=0;i<fs.length;i++) ytPause(fs[i]);
+}
+function sheetOpen(el){ pauseAll(); el.classList.add("open"); }
 function sheetShut(el){ el.classList.remove("open"); closeRow(); }
 function closeRow(){
   if(!openRow) return;
@@ -1377,8 +1397,11 @@ function paintRows(){
       f.setAttribute("allow","autoplay; encrypted-media; fullscreen");
       f.setAttribute("allowfullscreen","true");
       f.setAttribute("sandbox","allow-scripts allow-same-origin allow-presentation");
+      // enablejsapi is what makes postMessage work. Without it the player simply
+      // ignores every command, which is why recording in a row never paused it.
+      var org = /^https?:$/.test(location.protocol) ? "&origin="+encodeURIComponent(location.origin) : "";
       f.src = "https://www.youtube-nocookie.com/embed/" + it.id +
-              "?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1";
+              "?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&fs=1&enablejsapi=1" + org;
       row.querySelector(".frame").appendChild(f);
       row.classList.add("open"); openRow = row;
       row.scrollIntoView({block:"nearest", behavior:"smooth"});
@@ -1603,9 +1626,10 @@ function openSheet(keptOnly){
        : ("Everything except the " + r.dropped + " you dropped. The dropped links are commented out at the bottom, not deleted."));
   mKept.classList.toggle("sel", !!keptOnly);
   mAll.classList.toggle("sel", !keptOnly);
-  pubMsg.textContent = ""; paintPub();
+  pub(""); paintPub();
   bPublish.querySelector("span").textContent =
     (token() ? "Publish " : "Save token and publish ") + live + (live===1?" clip":" clips") + " to the site";
+  pauseAll();
   sheet.classList.add("open");
 }
 // Kept-only is the default. This page keeps its own list in its own database and
