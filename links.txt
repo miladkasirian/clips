@@ -1,7 +1,7 @@
 # Family Guy short clips - official @FamilyGuyFOX channel
 # One link per line, in view order (most watched first).
 # Put a # in front of a line to park it without deleting it.
-# 9 live links. 48 more are commented out below.
+# 9 live links. 37 more are commented out below.
 
 https://www.youtube.com/watch?v=Lun4z5hMSAY | Looks like even Thanos couldn't snap away Chris, Joe, and Tricia! 😆 It's like the universe decided Meg's finally more popular. Who knew the leftovers of a snap would be this entertaining?
 https://www.youtube.com/watch?v=fKTaYOTCDsA | So, Stewie finally drops that British accent, and it turns out it’s just Seth MacFarlane's own voice at a higher pitch! 😄 Who knew Stewie had a hidden talent for sounding like a mix of Brian and Quagmire? Seth really does voice just about everybody, doesn’t he? 🎤
@@ -52,15 +52,14 @@ https://www.youtube.com/watch?v=SoG7VjTqxM4 | Looks like Brian's finally accepte
 
 # ---- held back: the title mentions something awkward for a lecture screen ----
 # https://www.youtube.com/watch?v=3Wk18VfEncE   Meg Has A Sexy Dream About Santa | Season 18 Ep. 9 | FAMILY GUY
-# https://www.youtube.com/watch?v=j7zFYpMBS-4   Brian Meets His Coworker At The Suicide Hotline | Season 16 Ep. 
-
+# https://www.youtube.com/watch?v=j7zFYpMBS-4   Brian Meets His Coworker At The Suicide Hotline | Season 16 Ep.
 
 # ---- added by hand ----
 https://www.youtube.com/watch?v=MRta5VOO8hE | The seagull's office life is truly something else. "YOU THOUGHT? How's that working out for you?" 😂 That back-and-forth is way too relatable!
 https://www.youtube.com/watch?v=pqaz3wy6KQc | Peter's channeling some serious "Lohranda" energy with those acrylic nails! 💅 "Hey Lohranda! I got four people on hold, but I can talk." Classic Peter, always making us laugh with his quirky antics. 😄
 
 
-# ---- dropped during review on 2026-08-28 (11) - delete the # to bring one back ----
+# ---- dropped during review on 2026-08-29 (11) - delete the # to bring one back ----
 # https://www.youtube.com/watch?v=ceYsWR8pbkE
 # https://www.youtube.com/watch?v=5lC8TL-BeOQ
 # https://www.youtube.com/watch?v=u9dxd5pJnMs
