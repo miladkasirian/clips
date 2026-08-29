@@ -163,9 +163,14 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
   min-height:18px;padding:3px 2px 0;display:flex;align-items:flex-start;gap:6px}
 .aistat.bad{color:var(--no)}
 .aistat.good{color:var(--ok)}
-/* A turning ring, so "is it doing anything?" is answerable without reading. */
-.sp{display:inline-block;flex:none;width:11px;height:11px;margin-top:3px;border-radius:50%;
+/* A turning ring, so "is it doing anything?" is answerable without reading.
+   Not called .sp - that is already the spacer in the tally bar, and naming it
+   twice turned the spacer into a ring stretched across the top of the page.
+   Shown by a class, not the hidden attribute: display on a class beats the
+   browser's [hidden] rule, so the attribute alone never hid anything. */
+.ring{display:none;flex:none;width:11px;height:11px;margin-top:3px;border-radius:50%;
   border:2px solid currentColor;border-top-color:transparent;animation:rot .7s linear infinite}
+.ring.on{display:inline-block}
 #pubMsg{display:flex;align-items:flex-start;gap:6px;line-height:1.5}
 .keypanel{display:none;gap:8px;position:fixed;left:12px;right:12px;z-index:58;
   bottom:calc(env(safe-area-inset-bottom) + 12px);
@@ -371,7 +376,7 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
         </div>
       </div>
     </div>
-    <p class="aistat" data-status id="aiStat"><i class="sp" hidden></i><span class="tx"></span></p>
+    <p class="aistat" data-status id="aiStat"><i class="ring"></i><span class="tx"></span></p>
     <div class="grid" style="margin-top:9px">
       <button class="act small" id="bLists" type="button">
         <svg viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg> Kept &amp; dropped
@@ -489,7 +494,7 @@ https://www.youtube.com/shorts/5lC8TL-BeOQ</div>
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Forget token
         </button>
       </div>
-      <p id="pubMsg" style="margin-top:9px;font-size:12.5px"><i class="sp" hidden></i><span class="tx"></span></p>
+      <p id="pubMsg" style="margin-top:9px;font-size:12.5px"><i class="ring"></i><span class="tx"></span></p>
     </div>
   </div>
 </div>
@@ -595,10 +600,10 @@ function setLive(cls, text){
    it a wait of a minute is indistinguishable from a page that has given up. */
 function stat(el, msg, busy){
   if(!el) return;
-  var sp = el.querySelector(".sp"), tx = el.querySelector(".tx");
+  var sp = el.querySelector(".ring"), tx = el.querySelector(".tx");
   if(!tx){ el.textContent = msg || ""; return; }
   tx.textContent = msg || "";
-  if(sp) sp.hidden = !busy;
+  if(sp) sp.classList.toggle("on", !!busy);
 }
 var flashT=null;
 function say(msg){
@@ -850,6 +855,10 @@ function mount(item){
   TR.cmd = cmd;
 
   msgHook = function(e){
+    // A list row has a player too, and it talks to this same window. Without
+    // this line the deck answered the ROW's onReady by playing itself - so
+    // pausing a row started the clip hiding behind the sheet.
+    if(e.source !== f.contentWindow) return;
     if(!/youtube(-nocookie)?\.com$/.test((e.origin||"").replace(/^https?:\/\//,""))) return;
     var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(x){ return; } }
     if(!d) return;
@@ -1383,7 +1392,7 @@ function paintRows(){
           '<button class="send" data-send type="button">Send</button>' +
           '<button class="cx" data-cancel type="button">&times;</button></div>' +
       '</div>' +
-      '<p class="aistat" data-status><i class="sp" hidden></i><span class="tx"></span></p>' +
+      '<p class="aistat" data-status><i class="ring"></i><span class="tx"></span></p>' +
       '<button class="mv" type="button">Move to ' + (other === "keep" ? "kept" : "dropped") + '</button></div>';
     if(NOTES[it.id]) row.querySelector(".rnote").textContent = NOTES[it.id];
     // the same module the deck uses, pointed at this row's clip
