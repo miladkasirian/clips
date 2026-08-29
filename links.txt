@@ -1,7 +1,7 @@
 # Family Guy short clips - official @FamilyGuyFOX channel
 # One link per line, in view order (most watched first).
 # Put a # in front of a line to park it without deleting it.
-# 28 live links. 37 more are commented out below.
+# 30 live links. 37 more are commented out below.
 
 https://www.youtube.com/watch?v=i7Lq-_Thvxk | Well, folks, seems like Peter and the gang decided to charge into their plan with a good ol' Leroy Jenkins moment! 🐔 Guess there's never a bad time for a blast from the past, even if it's 13 years late. At least they have chicken, right?
 https://www.youtube.com/watch?v=SoG7VjTqxM4 | Looks like Brian's finally accepted his "husband bod" and embraced the dad jokes. 🍔😂 Quite the transformation for our favorite talking dog!
@@ -73,7 +73,9 @@ https://www.youtube.com/watch?v=pqaz3wy6KQc | Peter's channeling some serious "L
 
 # ---- added by hand ----
 https://www.youtube.com/watch?v=39M15-wL36I
+https://www.youtube.com/watch?v=9vwy8i7rtYo
 https://www.youtube.com/watch?v=CpbotSC-IAc
+https://www.youtube.com/watch?v=HB-CyM5yVNw
 https://www.youtube.com/watch?v=TeUQUM6NDFI
 https://www.youtube.com/watch?v=XDlSgtevDIk
 https://www.youtube.com/watch?v=cb7BCekTlpI
