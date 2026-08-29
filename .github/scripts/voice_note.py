@@ -15,7 +15,7 @@ Nothing here is clever. It is deliberately linear so that a failure on one clip
 cannot take the others down with it, and so that a half-finished run leaves the
 recording in place to be tried again rather than silently losing it.
 """
-import base64, json, os, re, sys, urllib.parse, urllib.request, urllib.error
+import base64, json, os, re, sys, time, urllib.parse, urllib.request, urllib.error
 
 ROOT   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 INBOX  = os.path.join(ROOT, "voice-in")
@@ -27,6 +27,7 @@ YTKEY  = os.environ.get("YOUTUBE_API_KEY", "").strip()   # optional: adds commen
 
 TRANSCRIBE = "gpt-4o-transcribe"
 WRITER     = "gpt-4o-mini"
+THINKER    = "gpt-4o"        # writes a note from evidence, which mini does badly
 SPEAKER    = "gpt-4o-mini-tts"
 VOICE      = "onyx"
 SECONDS    = 20
@@ -36,13 +37,14 @@ def config():
     """The database address and the model names live beside the page, so they can
     be changed without touching this script."""
     out = {"db": "", "room": "default", "transcribe": TRANSCRIBE, "writer": WRITER,
-           "speaker": SPEAKER, "voice": VOICE, "seconds": SECONDS}
+           "thinker": THINKER, "speaker": SPEAKER, "voice": VOICE, "seconds": SECONDS}
     try:
         txt = open(CONFIG, encoding="utf-8").read()
     except Exception:
         return out
     for key, pat in [("db", r'db:\s*"([^"]*)"'), ("room", r'room:\s*"([^"]*)"'),
                      ("transcribe", r'transcribe:\s*"([^"]*)"'), ("writer", r'writer:\s*"([^"]*)"'),
+                     ("thinker", r'thinker:\s*"([^"]*)"'),
                      ("speaker", r'speaker:\s*"([^"]*)"'), ("voice", r'voice:\s*"([^"]*)"')]:
         m = re.search(pat, txt)
         if m: out[key] = m.group(1)
@@ -148,7 +150,7 @@ def evidence(vid):
             if 4 <= len(txt) <= 220:
                 ev["comments"].append((c.get("likeCount") or 0, txt))
         ev["comments"].sort(reverse=True)
-        ev["comments"] = [t for _, t in ev["comments"][:15]]
+        ev["comments"] = ["(%d likes) %s" % (k, t) for k, t in ev["comments"][:20]]
     except Exception as e:
         print("   (no comments: %s)" % e)
     return ev
@@ -190,18 +192,35 @@ WRITE_SAID = (COMMON + "\n\n"
     "means - names, characters, the situation - and answer plainly. If they ask something the "
     "evidence settles, just give the answer.")
 
+NOTHING = "NOT ENOUGH"
+
 WRITE_AUTO = (COMMON + "\n\n"
-    "Nobody dictated anything this time. Write the note yourself, from the evidence below.\n"
-    "THE TITLE IS THE FACT. It says what actually happens in the clip, and the note must be "
-    "about that. Build it around the title.\n"
-    "The comments tell you what people found funny about it - the line worth repeating, the "
-    "detail everyone noticed. Use them for the angle, never for the subject. A comment that "
-    "does not fit the title is about something else entirely: ignore it. Never build the note "
-    "on a tangent from a comment, and never name another film or show unless the title itself "
-    "does.\n"
-    "Do NOT invent a detail the evidence does not support. If the evidence is thin, say "
-    "something true and general about the humour rather than guessing at what happened.\n"
-    "Write it as the lecturer's own aside to the class, not as a summary.")
+    "Nobody dictated anything. You are writing it yourself, from the evidence below - the "
+    "clip's title, and what people said underneath it.\n"
+    "\n"
+    "THE TEST: the note must name something only THIS clip could be about - the character, the "
+    "thing that happens, the line people quote, the film or the running gag the comments name. "
+    "If the note could be pasted under any other comedy clip, it has failed.\n"
+    "\n"
+    "The title says what happens. The comments say what was funny about it, and they often name "
+    "the reference outright - a film, a character, a joke everyone knows. Take the reference "
+    "from them; do not invent one, and ignore a comment that clearly belongs to a different "
+    "clip.\n"
+    "\n"
+    "BANNED, without exception:\n"
+    "- greetings and sign-offs: 'Alright everyone', 'Alright folks', 'Enjoy the break', "
+    "'Keep that creativity flowing', 'Remember,'\n"
+    "- filler wisdom: 'just goes to show', 'you never know', 'it is all about the unexpected', "
+    "'comedy thrives on', 'that is one way to', 'sometimes life just'\n"
+    "- any sentence about humour, comedy or creativity in general\n"
+    "- calling it 'this clip', 'that video', 'the video we just watched'\n"
+    "These are what padding sounds like. A note built from them says nothing.\n"
+    "\n"
+    "IF THE EVIDENCE WILL NOT CARRY A SPECIFIC NOTE, REPLY WITH EXACTLY: " + NOTHING + "\n"
+    "Nothing else - no apology, no attempt anyway. Saying nothing is a correct answer and it "
+    "is wanted. A vague note is worse than no note, because it goes in front of a class.\n"
+    "\n"
+    "Write it as the lecturer's own aside to the room.")
 
 
 def ask(said, clip, auto):
@@ -212,9 +231,23 @@ def ask(said, clip, auto):
 
 
 def polish(said, cfg, clip="", auto=False):
+    """Writing from evidence is a harder job than tidying dictation, so it gets a
+    better model. If that model is not available to the account the run must not
+    die for it - fall back to the everyday one and say so."""
+    if not auto:
+        return _write(said, cfg, clip, auto, cfg["writer"])
+    try:
+        return _write(said, cfg, clip, auto, cfg["thinker"])
+    except Exception as e:
+        print("   (%s would not answer: %s - falling back to %s)"
+              % (cfg["thinker"], str(e)[:90], cfg["writer"]))
+        return _write(said, cfg, clip, auto, cfg["writer"])
+
+
+def _write(said, cfg, clip, auto, model):
     words = round(cfg["seconds"] * 2.6)
     body = json.dumps({
-        "model": cfg["writer"], "temperature": 0.7,
+        "model": model, "temperature": 0.7,
         "messages": [
             {"role": "system", "content": (WRITE_AUTO if auto else WRITE_SAID) % (words, cfg["seconds"])},
             {"role": "user", "content": ask(said, clip, auto)}]}).encode()
@@ -284,6 +317,14 @@ def firebase(cfg, child, vid, value):
         print("   could not reach the database: %s" % e)
 
 
+def verdict(cfg, vid, why):
+    """An answer that is not a note. The page watches this the same way it
+    watches the notes, so 'I have nothing' arrives as fast as a note does.
+    The time is part of the value so that the same answer twice still reads as
+    something new having happened."""
+    firebase(cfg, "verdicts", vid, "%d|%s" % (int(time.time()), why))
+
+
 def main():
     if not KEY:
         print("No OPENAI_API_KEY. Add a repository secret named CLIPS.", file=sys.stderr)
@@ -337,6 +378,15 @@ def main():
             if auto and not seen:
                 raise RuntimeError("nothing is known about this clip, so there is nothing to write from")
             note = polish(said, cfg, seen, auto)
+            # It is allowed to have nothing to say. A vague note goes in front of
+            # a class, so an honest refusal beats one every time - and it must
+            # reach the page, not just this log, or the phone waits for ever.
+            if note.upper().startswith(NOTHING):
+                print("   note : (declined - the evidence would only support padding)")
+                verdict(cfg, vid, "There is not enough about this clip to write anything "
+                                  "worth saying. Tell it yourself.")
+                os.remove(path)
+                continue
             print("   note : %s" % note[:110])
             firebase(cfg, "notes", vid, note)
             relabel(vid, note)

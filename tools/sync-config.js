@@ -36,6 +36,7 @@ window.SYNC = {
 window.AI = {
   transcribe: "gpt-4o-transcribe",   // speech -> text, any language
   writer:     "gpt-4o-mini",         // tidies and shortens it into English
+  thinker:    "gpt-4o",              // writes a note from evidence when you do not talk
   speaker:    "gpt-4o-mini-tts",     // text -> an American voice
   voice:      "onyx",                // onyx, ash, echo and cedar are the male ones
   seconds:    20                     // how long the spoken version should run

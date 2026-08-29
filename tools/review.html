@@ -202,6 +202,7 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
 }
 .rhead em{flex:none;font-style:normal;font-size:11px;color:var(--ok)}
 .rnote{font-size:12.5px;color:var(--dim);padding:0 12px 10px;line-height:1.5}
+.rnote[hidden]{display:none}
 .rbody .rowtools{margin-top:9px}
 .rbody .rowtools textarea{height:78px}
 .rbody .aistat{padding:5px 2px 3px}
@@ -556,6 +557,8 @@ var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$(
 var ADDED = {};        // id -> {url, title}  links typed in by hand, kept in Firebase
 var NOTES = {};        // id -> text           what to say about a clip when it ends
 var VOICES = {};       // id -> true           a spoken version exists in audio/<id>.mp3
+var VERDICTS = {};     // id -> "<time>|<why>"   an answer that is not a note:
+                       //                        the workflow had nothing worth saying
 var PENDING = {};      // id -> when it was sent   a newer recording is on its way, so the
                        //                          file on the site is the PREVIOUS take and
                        //                          the play button must not be there at all
@@ -1259,7 +1262,7 @@ function noteTools(box, getClip){
     reader.readAsDataURL(blob);
   }
   function await_(id){
-    var before = NOTES[id] || "", n = 0;
+    var before = NOTES[id] || "", wasV = VERDICTS[id] || "", n = 0;
     var poll = setInterval(function(){
       n++;
       if(n > 40){
@@ -1270,17 +1273,32 @@ function noteTools(box, getClip){
       }
       if(n === 6) say("Still working\u2026 the first run of the day takes longer.", "", true);
       pullAdded(function(){
+        // "I have nothing to say about this one" is a real answer and arrives
+        // the same way a note does. Without this the phone waited three minutes
+        // for a note that was never coming.
+        if(VERDICTS[id] && VERDICTS[id] !== wasV){
+          clearInterval(poll); micBtn.classList.remove("busy"); wandBt.classList.remove("busy");
+          delete PENDING[id]; syncNotes();
+          say(String(VERDICTS[id]).split("|").slice(1).join("|"), "bad");
+          return;
+        }
         if(NOTES[id] && NOTES[id] !== before){
           clearInterval(poll); micBtn.classList.remove("busy"); wandBt.classList.remove("busy");
           var clip=getClip();
           if(clip && clip.id===id){
-            saved = clean(NOTES[id]);      // this is now the baseline, not an edit
-            note.value = saved;
+            note.value = clean(NOTES[id]);
+            // Deliberately NOT the new baseline. A note that was written for you
+            // is a proposal, not a decision: the tick stays out so you can read
+            // it, change it, and put your name to it. Pressing it is the moment
+            // it becomes yours.
+            saved = clean(before);
             paintDirty();
             if(VOICES[id]) waitForVoice(id, sentAt || Date.now());
             else paintHear();
           }
           if(cur && cur.id===id && box!==deckBox) paintNote();
+          var host = box.closest(".row2");
+          if(host) paintRowNote(host, id);
           if(lists.classList.contains("open") && !openRow) paintRows();
           say(VOICES[id] ? "Written up. The recording is still publishing\u2026"
                          : "Written up.", "good", !!VOICES[id]);
@@ -1298,6 +1316,8 @@ function noteTools(box, getClip){
       saved = c ? clean(NOTES[c.id] || "") : "";
       note.value = saved;
     }
+    var host = box.closest(".row2"), c2 = getClip();
+    if(host && c2) paintRowNote(host, c2.id);
     paintDirty(); paintHear();
     return true;
   });
@@ -1318,7 +1338,15 @@ function noteTools(box, getClip){
     var url = "../audio/" + id + ".mp3", n = 0;
     var poll = setInterval(function(){
       n++;
-      if(n > 40){ clearInterval(poll); delete PENDING[id]; syncNotes(); return; }
+      // Four minutes is far longer than GitHub has ever taken. Giving up in
+      // silence left the ring turning and "still publishing" on screen for a
+      // quarter of an hour - a wait with no end is worse than a plain answer.
+      if(n > 60){
+        clearInterval(poll); delete PENDING[id]; syncNotes();
+        say("The spoken version has not appeared on the site after four minutes. The button "
+            + "is back, but it may still play the previous take.", "bad");
+        return;
+      }
       fetch(url + "?t=" + Date.now(), {method:"HEAD", cache:"no-store"}).then(function(r){
         if(!r.ok) return;
         var lm = Date.parse(r.headers.get("last-modified") || "");
@@ -1394,6 +1422,17 @@ function pauseAll(){
   for(var i=0;i<fs.length;i++) ytPause(fs[i]);
 }
 function sheetOpen(el){ pauseAll(); el.classList.add("open"); }
+
+/* The line of note under a row's title. It has to be written from wherever the
+   note currently is, not from what was there when the row was built - otherwise
+   a note that arrives while you are looking at the row never shows up in it. */
+function paintRowNote(row, id){
+  var el = row && row.querySelector(".rnote");
+  if(!el) return;
+  var t = NOTES[id] || "";
+  el.textContent = t;
+  el.hidden = !t;
+}
 function sheetShut(el){ el.classList.remove("open"); closeRow(); }
 function closeRow(){
   if(!openRow) return;
@@ -1427,7 +1466,7 @@ function paintRows(){
       '<span class="mvi" title="Move to the other list"><svg viewBox="0 0 24 24">' +
       '<path d="M7 7h13l-3-3"/><path d="M17 17H4l3 3"/></svg></span>' +
       '<span class="go"><svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg></span></div>' +
-      (NOTES[it.id] ? '<div class="rnote"></div>' : "") +
+      '<div class="rnote" hidden></div>' +
       '<div class="rbody"><div class="frame"></div>' +
       '<div class="notewrap rowtools">' +
         '<textarea data-note maxlength="600" spellcheck="false" autocomplete="off"' +
@@ -1449,7 +1488,7 @@ function paintRows(){
       '</div>' +
       '<p class="aistat" data-status><i class="ring"></i><span class="tx"></span></p>' +
       '<button class="mv" type="button">Move to ' + (other === "keep" ? "kept" : "dropped") + '</button></div>';
-    if(NOTES[it.id]) row.querySelector(".rnote").textContent = NOTES[it.id];
+    paintRowNote(row, it.id);
     // the same module the deck uses, pointed at this row's clip
     var tools = noteTools(row.querySelector(".rowtools"), function(){ return it; });
     tools.refresh();
@@ -1522,6 +1561,7 @@ function pullAdded(done){
       o = o || {};
       ADDED = o.added || {};
       VOICES = o.voices || {};
+      VERDICTS = o.verdicts || {};
       // a note being edited on this phone right now must not be overwritten by
       // the copy the server still has
       var typing = document.activeElement;
@@ -1530,6 +1570,7 @@ function pullAdded(done){
       NOTES = o.notes || {};
       if(live) NOTES[live] = mine;
       rebuild();
+      saveLocal();      // otherwise this phone's own copy quietly falls behind
       // WHY: rebuild() only redraws the queue. Without this, a note dictated on
       // the other phone never reached the box on this one until you navigated
       // away and back, and the play button never appeared at all.
