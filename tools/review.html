@@ -157,10 +157,16 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
   stroke-linecap:round;stroke-linejoin:round}
 .notewrap .spk.has{color:var(--gold);border-color:rgba(255,200,97,.4);background:rgba(255,200,97,.12)}
 .notewrap .spk.busy{opacity:.55;pointer-events:none}
-.aistat{font-size:11.5px;color:var(--violet);letter-spacing:.2px;height:16px;padding:2px 2px 0;
-  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+/* The status line used to be one clipped 16px row, so "Sent. Writing it up..."
+   was cut in half by the button under it. It now wraps and grows instead. */
+.aistat{font-size:11.5px;line-height:1.5;color:var(--violet);letter-spacing:.2px;
+  min-height:18px;padding:3px 2px 0;display:flex;align-items:flex-start;gap:6px}
 .aistat.bad{color:var(--no)}
 .aistat.good{color:var(--ok)}
+/* A turning ring, so "is it doing anything?" is answerable without reading. */
+.sp{display:inline-block;flex:none;width:11px;height:11px;margin-top:3px;border-radius:50%;
+  border:2px solid currentColor;border-top-color:transparent;animation:rot .7s linear infinite}
+#pubMsg{display:flex;align-items:flex-start;gap:6px;line-height:1.5}
 .keypanel{display:none;gap:8px;position:fixed;left:12px;right:12px;z-index:58;
   bottom:calc(env(safe-area-inset-bottom) + 12px);
   max-width:616px;margin:0 auto;padding:12px;border-radius:16px;
@@ -185,7 +191,7 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
 .rnote{font-size:12.5px;color:var(--dim);padding:0 12px 10px;line-height:1.5}
 .rbody .rowtools{margin-top:9px}
 .rbody .rowtools textarea{height:78px}
-.rbody .aistat{padding:4px 2px 0}
+.rbody .aistat{padding:5px 2px 3px}
 
 /* ---------- decision ---------- */
 footer{flex:none;padding-top:10px;margin-top:auto}
@@ -365,7 +371,7 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
         </div>
       </div>
     </div>
-    <p class="aistat" data-status id="aiStat"></p>
+    <p class="aistat" data-status id="aiStat"><i class="sp" hidden></i><span class="tx"></span></p>
     <div class="grid" style="margin-top:9px">
       <button class="act small" id="bLists" type="button">
         <svg viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg> Kept &amp; dropped
@@ -483,7 +489,7 @@ https://www.youtube.com/shorts/5lC8TL-BeOQ</div>
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Forget token
         </button>
       </div>
-      <p id="pubMsg" style="margin-top:9px;font-size:12.5px"></p>
+      <p id="pubMsg" style="margin-top:9px;font-size:12.5px"><i class="sp" hidden></i><span class="tx"></span></p>
     </div>
   </div>
 </div>
@@ -583,6 +589,16 @@ var SYNC = {
 function setLive(cls, text){
   live.className = "live" + (cls?" "+cls:"");
   liveTxt.textContent = text;
+}
+/* Every status line on this page is the same three things: a message, a colour,
+   and whether something is still running. The ring is not decoration - without
+   it a wait of a minute is indistinguishable from a page that has given up. */
+function stat(el, msg, busy){
+  if(!el) return;
+  var sp = el.querySelector(".sp"), tx = el.querySelector(".tx");
+  if(!tx){ el.textContent = msg || ""; return; }
+  tx.textContent = msg || "";
+  if(sp) sp.hidden = !busy;
 }
 var flashT=null;
 function say(msg){
@@ -1004,10 +1020,10 @@ function noteTools(box, getClip){
   var player = null;     // for playing the spoken version back
   var sentAt = 0;        // when the current recording was handed over
 
-  function say(msg, cls){
+  function say(msg, cls, busy){
     if(!statusEl) return;
-    statusEl.textContent = msg || "";
     statusEl.className = "aistat" + (cls ? " " + cls : "");
+    stat(statusEl, msg, busy);
   }
   function clock(ms){
     var s=Math.floor(ms/1000), m=Math.floor(s/60); s=s%60;
@@ -1086,7 +1102,7 @@ function noteTools(box, getClip){
     if(!navigator.mediaDevices || !window.MediaRecorder){
       say("This browser cannot record. Type the note instead.", "bad"); return;
     }
-    say("Asking for the microphone…");
+    say("Asking for the microphone…", "", true);
     navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){
       stream=st; chunks=[]; discard=false; started=Date.now();
       var mime=pickMime();
@@ -1158,7 +1174,7 @@ function noteTools(box, getClip){
     // ".voice." asks the workflow for the spoken version too, which is always
     var name = id + ".voice." + ext;
     micBtn.classList.add("busy");
-    say("Sending it…");
+    say("Sending it…", "", true);
     var reader=new FileReader();
     reader.onload=function(){
       var b64=String(reader.result).split(",")[1]||"";
@@ -1175,7 +1191,7 @@ function noteTools(box, getClip){
         // from this moment the file on the site is out of date, so the button
         // goes away everywhere - in the deck and in every open row
         PENDING[id] = sentAt; syncNotes();
-        say("Sent. Writing it up — usually under a minute…");
+        say("Sent. Writing it up — usually under a minute…", "", true);
         await_(id);
       }).catch(function(e){
         say(String(e.message||e), "bad"); micBtn.classList.remove("busy");
@@ -1194,7 +1210,7 @@ function noteTools(box, getClip){
         say("No answer after three minutes. Look at the Actions tab on GitHub - the run "
             + "itself will say what went wrong.", "bad"); return;
       }
-      if(n === 6) say("Still working\u2026 the first run of the day takes longer.");
+      if(n === 6) say("Still working\u2026 the first run of the day takes longer.", "", true);
       pullAdded(function(){
         if(NOTES[id] && NOTES[id] !== before){
           clearInterval(poll); micBtn.classList.remove("busy");
@@ -1209,7 +1225,7 @@ function noteTools(box, getClip){
           if(cur && cur.id===id && box!==deckBox) paintNote();
           if(lists.classList.contains("open") && !openRow) paintRows();
           say(VOICES[id] ? "Written up. The recording is still publishing\u2026"
-                         : "Written up.", "good");
+                         : "Written up.", "good", !!VOICES[id]);
         }
       });
     }, 5000);
@@ -1285,9 +1301,9 @@ function paintNote(){
   deckTools.refresh();
   aisay(cur && VOICES[cur.id] ? "This clip already has a spoken version." : "");
 }
-function aisay(msg, cls){
-  aiStat.textContent = msg || "";
+function aisay(msg, cls, busy){
   aiStat.className = "aistat" + (cls ? " " + cls : "");
+  stat(aiStat, msg, busy);
 }
 
 /* =====================================================================
@@ -1347,7 +1363,7 @@ function paintRows(){
           '<button class="send" data-send type="button">Send</button>' +
           '<button class="cx" data-cancel type="button">&times;</button></div>' +
       '</div>' +
-      '<p class="aistat" data-status></p>' +
+      '<p class="aistat" data-status><i class="sp" hidden></i><span class="tx"></span></p>' +
       '<button class="mv" type="button">Move to ' + (other === "keep" ? "kept" : "dropped") + '</button></div>';
     if(NOTES[it.id]) row.querySelector(".rnote").textContent = NOTES[it.id];
     // the same module the deck uses, pointed at this row's clip
@@ -1688,9 +1704,9 @@ function pruneBackups(){
     }, Promise.resolve(0)).then(function(n){ return {removed:n, kept:KEEP_BACKUPS}; });
   }, function(){ return null; });
 }
-function pub(msg, colour){
-  pubMsg.textContent = msg;
+function pub(msg, colour, busy){
   pubMsg.style.color = colour === "bad" ? "var(--no)" : colour === "good" ? "var(--ok)" : "var(--dim)";
+  stat(pubMsg, msg, busy);
 }
 bForget.addEventListener("click", function(){
   try{ localStorage.removeItem(ADDKEY); }catch(e){}
@@ -1712,21 +1728,21 @@ bPublish.addEventListener("click", function(){
               "The current links.txt is saved to backups/ first.")) return;
 
   bPublish.disabled = true;
-  pub("Reading the file that is on the site\u2026");
+  pub("Reading the file that is on the site\u2026", "", true);
   gh("contents/links.txt?ref=" + BRANCH).then(function(r){
     if(r.status === 401 || r.status === 403) throw new Error("GitHub refused the token. Check it has Contents write access to " + REPO + ".");
     if(!r.ok) throw new Error("Could not read links.txt (HTTP " + r.status + ").");
     return r.json();
   }).then(function(cur){
     var name = "backups/links-" + stamp() + ".txt";
-    pub("Saving the old one as " + name + "\u2026");
+    pub("Saving the old one as " + name + "\u2026", "", true);
     return gh("contents/" + name, {
       method:"PUT", body: JSON.stringify({
         message:"Back up links.txt before publishing from the review page",
         content: cur.content.replace(/\n/g,""), branch: BRANCH })
     }).then(function(r){
       if(!r.ok && r.status !== 422) throw new Error("Backup failed (HTTP " + r.status + "). Nothing was changed.");
-      pub("Writing the new links.txt\u2026");
+      pub("Writing the new links.txt\u2026", "", true);
       return gh("contents/links.txt", {
         method:"PUT", body: JSON.stringify({
           message:"Publish " + live + " clips from the review page",
@@ -1734,7 +1750,7 @@ bPublish.addEventListener("click", function(){
       });
     }).then(function(r){
       if(!r.ok) return r.text().then(function(x){ throw new Error("Publish failed (HTTP " + r.status + "). " + x.slice(0,120)); });
-      pub("Done \u2014 " + live + (live===1?" clip is":" clips are") + " on the site. Tidying old backups\u2026", "good");
+      pub("Done \u2014 " + live + (live===1?" clip is":" clips are") + " on the site. Tidying old backups\u2026", "good", true);
       // the publish is already safe at this point; whatever happens next is
       // housekeeping and must not be reported as a failed publish
       return pruneBackups().then(function(res){
