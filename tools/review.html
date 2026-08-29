@@ -72,6 +72,15 @@ main{flex:none;display:flex;flex-direction:column;justify-content:flex-start;gap
      height and the picture never has to be letterboxed */
   width:100%;max-width:min(100%, calc(46vh * 16 / 9));margin:0 auto}
 .stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+/* YouTube renders its mobile click-out buttons inside a cross-origin iframe, so
+   our CSS cannot target those elements directly. These three small masks sit
+   only over the click-out zones (link / More videos / YouTube) and leave the
+   rest of YouTube's controls enabled. */
+.yt-outmask{position:absolute;bottom:0;height:52px;z-index:1;pointer-events:auto;
+  background:rgba(4,7,14,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.yt-outmask.l{left:5%;width:11%;border-radius:12px 12px 0 0}
+.yt-outmask.c{left:41%;width:29%;border-radius:12px 12px 0 0}
+.yt-outmask.r{right:5%;width:19%;border-radius:12px 12px 0 0}
 .veil{position:absolute;inset:0;z-index:2;display:grid;place-items:center;gap:12px;
   background:rgba(4,7,14,.72);backdrop-filter:blur(3px);cursor:pointer}
 .veil.gone{display:none}
@@ -348,6 +357,9 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
   <main id="main">
     <div class="num" id="num">Loading&hellip;</div>
     <div class="stage" id="stage">
+      <i class="yt-outmask l" aria-hidden="true"></i>
+      <i class="yt-outmask c" aria-hidden="true"></i>
+      <i class="yt-outmask r" aria-hidden="true"></i>
       <div class="veil" id="veil"><div class="spin"></div></div>
     </div>
     <div class="done" id="donePanel" hidden>
@@ -933,7 +945,7 @@ function mount(item){
   f.setAttribute("sandbox","allow-scripts allow-same-origin allow-presentation");
   var org = /^https?:$/.test(location.protocol) ? "&origin="+encodeURIComponent(location.origin) : "";
   f.src = "https://www.youtube-nocookie.com/embed/" + item.id +
-          "?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&fs=1&controls=0&enablejsapi=1" + org;
+          "?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&fs=1&enablejsapi=1" + org;
   frame = f;
 
   function cmd(fn,args){
