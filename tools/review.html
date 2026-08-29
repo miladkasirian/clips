@@ -933,7 +933,7 @@ function mount(item){
   f.setAttribute("sandbox","allow-scripts allow-same-origin allow-presentation");
   var org = /^https?:$/.test(location.protocol) ? "&origin="+encodeURIComponent(location.origin) : "";
   f.src = "https://www.youtube-nocookie.com/embed/" + item.id +
-          "?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&fs=1&enablejsapi=1" + org;
+          "?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&fs=1&controls=0&enablejsapi=1" + org;
   frame = f;
 
   function cmd(fn,args){
