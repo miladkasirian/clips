@@ -233,6 +233,22 @@ footer{flex:none;padding-top:10px;margin-top:auto}
 .sheet .inner{max-width:640px;margin:0 auto;width:100%;display:flex;flex-direction:column;
   gap:12px;height:100%;min-height:0}
 .sheet h2{font-size:20px;font-weight:800;letter-spacing:-.5px}
+/* ---------- back up / restore ---------- */
+.safe{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:7px;
+  border:1px solid var(--line2);border-radius:14px;padding:9px;background:rgba(255,255,255,.03)}
+.sr{display:flex;gap:9px;align-items:flex-start;padding:8px 9px;border-radius:11px;
+  background:rgba(255,255,255,.04);border:1px solid var(--line2)}
+.sr.diff{border-color:rgba(255,200,97,.45);background:rgba(255,200,97,.07)}
+.sr input{flex:none;width:17px;height:17px;margin-top:2px;accent-color:var(--ok)}
+.sr .who{font-family:var(--mono);font-size:11px;color:var(--dim);flex:none;min-width:58px}
+.sr .txt{flex:1;font-size:12.5px;line-height:1.45;min-width:0}
+.sr .was{display:block;margin-top:3px;color:var(--faint);font-size:11.5px}
+.sr .tag{font-size:10.5px;font-weight:800;letter-spacing:.4px;color:var(--gold)}
+.safebar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--dim)}
+.safebar button{height:30px;padding:0 11px;border-radius:9px;cursor:pointer;font-family:inherit;
+  font-size:12px;border:1px solid var(--line2);background:rgba(255,255,255,.06);color:var(--txt)}
+.safeopt{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--dim);line-height:1.45}
+.safeopt input{flex:none;width:17px;height:17px;margin-top:1px;accent-color:var(--ok)}
 .sheet p{font-size:13.5px;color:var(--dim);max-width:60ch}
 .sheet ol{margin-left:20px;font-size:13.5px;color:var(--dim)}
 .sheet li{margin:5px 0}
@@ -402,6 +418,12 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
         <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> <span id="bExportTxt">Export / publish</span>
       </button>
     </div>
+    <div class="grid" style="margin-top:9px;grid-template-columns:1fr">
+      <button class="act small" id="bSafe" type="button">
+        <svg viewBox="0 0 24 24"><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+        <span id="bSafeTxt">Notes &amp; voices &mdash; back up / restore</span>
+      </button>
+    </div>
     <p class="hint">Progress saves by itself &mdash; close this and come back any time.
       <span id="kb"></span></p>
   </footer>
@@ -451,6 +473,46 @@ https://www.youtube.com/shorts/5lC8TL-BeOQ</div>
       </button>
     </div>
     <div class="results" id="results"></div>
+  </div>
+</div>
+
+<div class="sheet" id="safeSheet">
+  <div class="inner">
+    <h2>Notes &amp; voices</h2>
+    <p style="font-size:12.5px;color:var(--dim)" id="safeLede"></p>
+    <div class="grid">
+      <button class="act keep" id="bSafeSave" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> Download a backup
+      </button>
+      <button class="act small" id="bSafePick" type="button">
+        <svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg> Open a backup&hellip;
+      </button>
+    </div>
+    <input type="file" id="safeFile" accept=".json,application/json" hidden>
+    <div class="safebar" id="safeBar" hidden>
+      <span id="safeCount"></span>
+      <button id="bSafeAll" type="button">All</button>
+      <button id="bSafeChanged" type="button">Only the changed ones</button>
+      <button id="bSafeNone" type="button">None</button>
+    </div>
+    <div class="safe" id="safeRows" hidden></div>
+    <label class="safeopt" id="safeVoiceOpt" hidden>
+      <input type="checkbox" id="safeVoice" checked>
+      <span>Put the spoken version back too. The exact file from the backup is written back &mdash;
+        nothing is spoken again, so it costs nothing. Without this the text goes back and the
+        <b>&#9654;</b> keeps playing whatever is on the site now, which is how the words and the
+        voice end up disagreeing.</span>
+    </label>
+    <p class="aistat" id="safeMsg"><i class="ring"></i><span class="tx"></span></p>
+    <div class="grid">
+      <button class="act keep" id="bSafeGo" type="button" hidden>
+        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        <span id="bSafeGoTxt">Restore</span>
+      </button>
+      <button class="act small" id="bSafeClose" type="button">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> Back
+      </button>
+    </div>
   </div>
 </div>
 
@@ -552,7 +614,13 @@ var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$(
     tKept=$("tKept"), tDropped=$("tDropped"), tSkipped=$("tSkipped"), bPubKeep=$("bPubKeep"),
     addSheet=$("addSheet"), addIn=$("addIn"), bCheck=$("bCheck"), bAddClose=$("bAddClose"), results=$("results"),
     pubBox=$("pubBox"), tokBox=$("tokBox"), tokIn=$("tokIn"), bPublish=$("bPublish"), pubTxt=$("pubTxt"),
-    bForget=$("bForget"), pubMsg=$("pubMsg");
+    bForget=$("bForget"), pubMsg=$("pubMsg"),
+    bSafe=$("bSafe"), bSafeTxt=$("bSafeTxt"), safeSheet=$("safeSheet"), safeLede=$("safeLede"),
+    bSafeSave=$("bSafeSave"), bSafePick=$("bSafePick"), safeFile=$("safeFile"),
+    safeBar=$("safeBar"), safeCount=$("safeCount"), bSafeAll=$("bSafeAll"),
+    bSafeChanged=$("bSafeChanged"), bSafeNone=$("bSafeNone"), safeRows=$("safeRows"),
+    safeVoiceOpt=$("safeVoiceOpt"), safeVoice=$("safeVoice"), safeMsg=$("safeMsg"),
+    bSafeGo=$("bSafeGo"), bSafeGoTxt=$("bSafeGoTxt"), bSafeClose=$("bSafeClose");
 
 var ADDED = {};        // id -> {url, title}  links typed in by hand, kept in Firebase
 var NOTES = {};        // id -> text           what to say about a clip when it ends
@@ -1792,6 +1860,232 @@ function gh(path, opts){
   }, opts.headers || {});
   return fetch("https://api.github.com/repos/" + REPO + "/" + path, opts);
 }
+/* =====================================================================
+   BACK UP AND PUT BACK
+
+   Two things can be lost: the words, which live in the database, and the
+   spoken version, which lives in the repository. The words go into the backup
+   file. The audio does NOT - what goes in is the git blob id of the exact mp3,
+   because that blob is already kept for ever by git. Putting one back is
+   writing those same bytes again: exact, instant, and free. Carrying 48MB of
+   base64 around in a file the phone has to download would be none of those.
+   ===================================================================== */
+/* the same tidying the note box does, at page level - two strings only differ
+   if they differ after it */
+function tidy(v){ return String(v||"").trim().replace(/\s+/g," ").replace(/\|/g,"/"); }
+
+var SAFE = null;              // the backup that is open, once one has been opened
+var SAFENOW = {};             // id -> sha of the mp3 currently on the site
+
+function safeSay(msg, cls, busy){
+  safeMsg.className = "aistat" + (cls ? " " + cls : "");
+  stat(safeMsg, msg, busy);
+}
+function safeStamp(){
+  var d = new Date(), p = function(x){ return (x<10?"0":"")+x; };
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"_"+p(d.getHours())+p(d.getMinutes());
+}
+/* The list of mp3s with their blob ids: one request, and it works without a
+   token because the repository is public. */
+function audioNow(){
+  return fetch("https://api.github.com/repos/" + REPO + "/contents/audio?ref=" + BRANCH,
+               {cache:"no-store"})
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(list){
+      var out = {};
+      (list||[]).forEach(function(f){
+        if(f.name && f.name.slice(-4) === ".mp3") out[f.name.slice(0,-4)] = f.sha;
+      });
+      return out;
+    }, function(){ return {}; });
+}
+function safeCounts(){
+  var withNote = 0, withVoice = 0;
+  ITEMS.forEach(function(it){
+    if(NOTES[it.id]) withNote++;
+    if(VOICES[it.id]) withVoice++;
+  });
+  return {n: ITEMS.length, note: withNote, voice: withVoice};
+}
+function paintSafeLede(){
+  var c = safeCounts();
+  safeLede.innerHTML = c.note + " of " + c.n + " clips have a note, " + c.voice +
+    " have a spoken version. A backup is one small file &mdash; keep it before you change a lot at once.";
+  bSafeTxt.textContent = "Notes & voices — back up / restore";
+}
+
+bSafe.addEventListener("click", function(){ paintSafeLede(); safeSay(""); sheetOpen(safeSheet); });
+bSafeClose.addEventListener("click", function(){ sheetShut(safeSheet); });
+
+bSafeSave.addEventListener("click", function(){
+  safeSay("Reading which spoken files are on the site…", "", true);
+  audioNow().then(function(sha){
+    var clips = ITEMS.map(function(it){
+      return {id: it.id, n: it.n, note: NOTES[it.id] || "",
+              voice: !!sha[it.id], sha: sha[it.id] || "", verdict: STATE[it.id] || ""};
+    });
+    var doc = {kind:"breaktime-notes", version:1, room:(window.SYNC&&SYNC.room)||"",
+               made:new Date().toISOString(), repo:REPO, clips:clips};
+    var name = "breaktime-notes-" + safeStamp() + ".json";
+    var url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 1)],
+                                           {type:"application/json"}));
+    var a = document.createElement("a");
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 4000);
+    var withV = clips.filter(function(c){ return c.voice; }).length;
+    safeSay("Saved " + name + " — " + clips.length + " clips, " + withV + " with a voice.", "good");
+  });
+});
+
+bSafePick.addEventListener("click", function(){ safeFile.value = ""; safeFile.click(); });
+safeFile.addEventListener("change", function(){
+  var f = safeFile.files && safeFile.files[0];
+  if(!f) return;
+  safeSay("Reading " + f.name + "…", "", true);
+  var fr = new FileReader();
+  fr.onload = function(){
+    var doc;
+    try{ doc = JSON.parse(String(fr.result)); }
+    catch(e){ safeSay("That is not a backup file - it is not even JSON.", "bad"); return; }
+    if(!doc || doc.kind !== "breaktime-notes" || !doc.clips || !doc.clips.length){
+      safeSay("That file is not one of these backups.", "bad"); return;
+    }
+    audioNow().then(function(sha){
+      SAFENOW = sha; SAFE = doc; paintSafe();
+      safeSay("Opened a backup made " + String(doc.made).replace("T"," ").slice(0,16) +
+              ". The changed ones are ticked.", "good");
+    });
+  };
+  fr.onerror = function(){ safeSay("Could not read that file.", "bad"); };
+  fr.readAsText(f);
+});
+
+function safeDiffers(c){
+  var textNow = tidy(NOTES[c.id] || ""), textWas = tidy(c.note || "");
+  if(textNow !== textWas) return true;
+  if(c.voice && c.sha && SAFENOW[c.id] !== c.sha) return true;
+  return false;
+}
+function paintSafe(){
+  safeRows.innerHTML = "";
+  var live = {}; ITEMS.forEach(function(it){ live[it.id] = it; });
+  SAFE.clips.forEach(function(c){
+    if(!c.note && !c.voice) return;          // nothing in the backup to put back
+    var diff = safeDiffers(c);
+    var row = document.createElement("label");
+    row.className = "sr" + (diff ? " diff" : "");
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = diff; cb.value = c.id;
+    row.appendChild(cb);
+    var who = document.createElement("span");
+    who.className = "who";
+    who.textContent = "Clip " + pad(c.n || (live[c.id] ? live[c.id].n : 0));
+    row.appendChild(who);
+    var t = document.createElement("span");
+    t.className = "txt";
+    t.textContent = c.note || "(no note — only the spoken file)";
+    if(c.voice) t.appendChild(Object.assign(document.createElement("b"),
+      {className:"tag", textContent:"  ▶ voice"}));
+    var now = tidy(NOTES[c.id] || "");
+    if(now && now !== tidy(c.note || "")){
+      var w = document.createElement("i");
+      w.className = "was";
+      w.textContent = "now on the site: " + now;
+      t.appendChild(w);
+    }
+    row.appendChild(t);
+    safeRows.appendChild(row);
+  });
+  safeRows.hidden = false; safeBar.hidden = false;
+  safeVoiceOpt.hidden = false; bSafeGo.hidden = false;
+  paintSafeCount();
+}
+function safeBoxes(){ return Array.prototype.slice.call(safeRows.querySelectorAll("input")); }
+function paintSafeCount(){
+  var boxes = safeBoxes(), on = boxes.filter(function(b){ return b.checked; }).length;
+  safeCount.textContent = on + " of " + boxes.length + " chosen";
+  bSafeGoTxt.textContent = on ? ("Put back " + on + (on===1 ? " clip" : " clips")) : "Nothing chosen";
+  bSafeGo.disabled = !on;
+}
+safeRows.addEventListener("change", paintSafeCount);
+bSafeAll.addEventListener("click", function(){
+  safeBoxes().forEach(function(b){ b.checked = true; }); paintSafeCount(); });
+bSafeNone.addEventListener("click", function(){
+  safeBoxes().forEach(function(b){ b.checked = false; }); paintSafeCount(); });
+bSafeChanged.addEventListener("click", function(){
+  var by = {}; SAFE.clips.forEach(function(c){ by[c.id] = c; });
+  safeBoxes().forEach(function(b){ b.checked = !!(by[b.value] && safeDiffers(by[b.value])); });
+  paintSafeCount();
+});
+
+/* One clip. The words first, because they cannot fail and they are what the
+   class actually reads; the audio after, because it needs the token and can. */
+function safeRestore(c, withVoice){
+  if(c.note){
+    NOTES[c.id] = c.note;
+    pushSide("notes", c.id, c.note);
+  }
+  if(!withVoice || !c.voice || !c.sha) return Promise.resolve(c.note ? "text" : "nothing");
+  if(SAFENOW[c.id] === c.sha) return Promise.resolve("already");
+  return gh("git/blobs/" + c.sha).then(function(r){
+    if(!r.ok) throw new Error("clip " + pad(c.n) + ": that spoken file is no longer in the repository");
+    return r.json();
+  }).then(function(b){
+    var content = String(b.content || "").replace(/\s+/g, "");
+    return gh("contents/audio/" + c.id + ".mp3?ref=" + BRANCH).then(function(r){
+      return r.ok ? r.json().then(function(j){ return j.sha; }) : null;
+    }, function(){ return null; }).then(function(cur){
+      var body = {message:"Put back the spoken note for " + c.id, content:content, branch:BRANCH};
+      if(cur) body.sha = cur;
+      return gh("contents/audio/" + c.id + ".mp3", {method:"PUT", body:JSON.stringify(body)});
+    });
+  }).then(function(r){
+    if(!r.ok) throw new Error("clip " + pad(c.n) + ": could not write the spoken file (HTTP " + r.status + ")");
+    SAFENOW[c.id] = c.sha;
+    VOICES[c.id] = true; pushSide("voices", c.id, true);
+    return "voice";
+  });
+}
+
+bSafeGo.addEventListener("click", function(){
+  if(!SAFE) return;
+  var by = {}; SAFE.clips.forEach(function(c){ by[c.id] = c; });
+  var chosen = safeBoxes().filter(function(b){ return b.checked; })
+                          .map(function(b){ return by[b.value]; })
+                          .filter(Boolean);
+  if(!chosen.length) return;
+  var wantVoice = safeVoice.checked && chosen.some(function(c){ return c.voice; });
+  if(wantVoice && !token()){
+    safeSay("Putting the spoken files back needs the GitHub token from Export / publish. " +
+            "Untick the box to put just the words back.", "bad");
+    return;
+  }
+  if(!confirm("Put " + chosen.length + " clip" + (chosen.length===1?"":"s") + " back?\n\n" +
+              "Their notes on every phone will be replaced by what is in the backup" +
+              (wantVoice ? ", and their spoken files on the site with it." : ".") +
+              "\n\nThis cannot be undone from here - take a backup first if you have not."))
+    return;
+  bSafeGo.disabled = true;
+  var done = 0, voices = 0, trouble = [];
+  chosen.reduce(function(chain, c){
+    return chain.then(function(){
+      safeSay("Putting back " + (done+1) + " of " + chosen.length + "…", "", true);
+      return safeRestore(c, wantVoice).then(function(what){
+        done++; if(what === "voice") voices++;
+      }, function(e){ done++; trouble.push(String(e.message || e)); });
+    });
+  }, Promise.resolve()).then(function(){
+    saveLocal(); syncNotes();
+    if(lists.classList.contains("open") && !openRow) paintRows();
+    paintSafe(); paintSafeLede();
+    var msg = done + " put back" + (voices ? ", " + voices + " spoken file" + (voices===1?"":"s") : "") + ".";
+    if(voices) msg += " Give GitHub a minute to publish them.";
+    if(trouble.length) safeSay(msg + " " + trouble.length + " had trouble: " + trouble[0], "bad");
+    else safeSay(msg, "good");
+    bSafeGo.disabled = false;
+  });
+});
+
 function b64(text){
   // btoa cannot take characters above 255; the list is plain ASCII but a title
   // in a comment could easily not be
