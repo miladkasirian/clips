@@ -17,12 +17,12 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{background:var(--bg);color:var(--txt);font-family:var(--font);line-height:1.5;
-  font-size:15px;-webkit-font-smoothing:antialiased;overflow:hidden}
+  font-size:15px;-webkit-font-smoothing:antialiased;overflow:auto}
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:radial-gradient(70vw 70vw at 15% -12%, rgba(255,77,157,.11), transparent 62%),
              radial-gradient(60vw 60vw at 90% 8%, rgba(24,201,168,.10), transparent 62%)}
 
-.app{display:flex;flex-direction:column;height:100%;max-width:640px;margin:0 auto;
+.app{display:flex;flex-direction:column;min-height:100%;height:auto;max-width:640px;margin:0 auto;
   padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
 
 /* ---------- header ---------- */
@@ -58,8 +58,8 @@ header{flex:none}
 .tally .sp{flex:1}
 
 /* ---------- clip ---------- */
-main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9px;min-height:0;
-  padding-top:4px;overflow:hidden}
+main{flex:none;display:flex;flex-direction:column;justify-content:flex-start;gap:9px;min-height:0;
+  padding-top:4px;overflow:visible}
 .num{font-size:19px;font-weight:800;letter-spacing:-.4px}
 .num em{font-style:normal;color:var(--gold);font-weight:700;font-size:12.5px;margin-left:9px;
   letter-spacing:.3px}
@@ -67,10 +67,10 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
    more button to the footer and the video simply sat on top of it. It shrinks
    now, keeping its shape, and main clips anything left over. */
 .stage{position:relative;background:#000;border:1px solid var(--line2);border-radius:16px;
-  overflow:hidden;aspect-ratio:16/9;flex:0 1 auto;min-height:0;
+  overflow:hidden;aspect-ratio:16/9;flex:none;
   /* cap the WIDTH from the height we can spare, so the ratio still decides the
      height and the picture never has to be letterboxed */
-  width:100%;max-width:min(100%, calc(42vh * 16 / 9));margin:0 auto}
+  width:100%;max-width:min(100%, calc(46vh * 16 / 9));margin:0 auto}
 .stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
 .veil{position:absolute;inset:0;z-index:2;display:grid;place-items:center;gap:12px;
   background:rgba(4,7,14,.72);backdrop-filter:blur(3px);cursor:pointer}
