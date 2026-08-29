@@ -534,6 +534,9 @@ var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$(
 var ADDED = {};        // id -> {url, title}  links typed in by hand, kept in Firebase
 var NOTES = {};        // id -> text           what to say about a clip when it ends
 var VOICES = {};       // id -> true           a spoken version exists in audio/<id>.mp3
+var PENDING = {};      // id -> when it was sent   a newer recording is on its way, so the
+                       //                          file on the site is the PREVIOUS take and
+                       //                          the play button must not be there at all
 var ADDKEY = "breaktime.review.token";   // the GitHub token, this device only
 var RAW = "";          // links.txt exactly as it was fetched
 var ITEMS = [];        // {id, url, line, n}  - only the live (uncommented) links
@@ -968,6 +971,18 @@ document.addEventListener("keydown", function(e){
    sets off a GitHub Action holding the OpenAI key. Nothing here needs a
    key, so anyone with the page can use it.
    ===================================================================== */
+/* Every note box registers here so that anything arriving from the database -
+   the other phone's note, or the workflow's answer to a recording made here -
+   reaches all of them at once. Rows are rebuilt from scratch on every paint, so
+   a box drops itself as soon as it leaves the document; without that pruning the
+   list would grow for the life of the page. */
+var HEARPAINT = [];
+function syncNotes(){
+  HEARPAINT = HEARPAINT.filter(function(f){
+    try{ return f() !== false; }catch(e){ return false; }
+  });
+}
+
 function noteTools(box, getClip){
   var note   = box.querySelector("[data-note]"),
       micBtn = box.querySelector("[data-mic]"),
@@ -1157,6 +1172,9 @@ function noteTools(box, getClip){
         if(!r.ok) return r.text().then(function(t){
           throw new Error("could not send it (HTTP "+r.status+") "+t.slice(0,80)); });
         sentAt = Date.now();
+        // from this moment the file on the site is out of date, so the button
+        // goes away everywhere - in the deck and in every open row
+        PENDING[id] = sentAt; syncNotes();
         say("Sent. Writing it up — usually under a minute…");
         await_(id);
       }).catch(function(e){
@@ -1172,6 +1190,7 @@ function noteTools(box, getClip){
       n++;
       if(n > 40){
         clearInterval(poll); micBtn.classList.remove("busy");
+        delete PENDING[id]; syncNotes();
         say("No answer after three minutes. Look at the Actions tab on GitHub - the run "
             + "itself will say what went wrong.", "bad"); return;
       }
@@ -1196,9 +1215,23 @@ function noteTools(box, getClip){
     }, 5000);
   }
 
+  syncNotes();     // prune the boxes that have gone before adding this one
+  HEARPAINT.push(function(){
+    if(!box.isConnected) return false;
+    // an unsaved edit outranks anything the server has to say
+    if(!dirty() && !note.readOnly){
+      var c = getClip();
+      saved = c ? clean(NOTES[c.id] || "") : "";
+      note.value = saved;
+    }
+    paintDirty(); paintHear();
+    return true;
+  });
   function paintHear(){
     var c=getClip();
-    hearBt.hidden = !(c && VOICES[c.id]);
+    // a voice has to exist AND not be about to be replaced. Showing it while a
+    // newer recording is in flight offers the old one, which is what happened.
+    hearBt.hidden = !(c && VOICES[c.id] && !PENDING[c.id]);
   }
 
   /* The note comes back from the database in seconds; the recording has to be
@@ -1209,16 +1242,15 @@ function noteTools(box, getClip){
      sent. Pages returns Last-Modified, which is exactly the fact needed. */
   function waitForVoice(id, since){
     var url = "../audio/" + id + ".mp3", n = 0;
-    hearBt.hidden = true;
     var poll = setInterval(function(){
       n++;
-      if(n > 40){ clearInterval(poll); paintHear(); return; }
+      if(n > 40){ clearInterval(poll); delete PENDING[id]; syncNotes(); return; }
       fetch(url + "?t=" + Date.now(), {method:"HEAD", cache:"no-store"}).then(function(r){
         if(!r.ok) return;
         var lm = Date.parse(r.headers.get("last-modified") || "");
         if(!lm || lm >= since - 5000){
           clearInterval(poll);
-          hearBt.hidden = false;
+          delete PENDING[id]; syncNotes();
           say("Written up. Press \u25B6 to hear it.", "good");
         }
       }).catch(function(){});
@@ -1394,7 +1426,12 @@ function pullAdded(done){
       var mine = live ? NOTES[live] : null;
       NOTES = o.notes || {};
       if(live) NOTES[live] = mine;
-      rebuild(); done && done();
+      rebuild();
+      // WHY: rebuild() only redraws the queue. Without this, a note dictated on
+      // the other phone never reached the box on this one until you navigated
+      // away and back, and the play button never appeared at all.
+      syncNotes();
+      done && done();
     })
     .catch(function(){ done && done(); });
 }
