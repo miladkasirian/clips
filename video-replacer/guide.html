@@ -108,7 +108,8 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
   <a href="#pipeline">The six steps</a>
   <a href="#fitting">Fitting English to your picture</a>
   <a href="#sentences">Why sentences, not fragments</a>
-  <a href="#noyoutube">Why not YouTube</a>
+  <a href="#youtube">Letting YouTube write it</a>
+  <a href="#noyoutube">Why the app never uploads</a>
   <a href="#privacy">What leaves this computer</a>
   <div class="grp">Reference</div>
   <a href="#yourvoice">Using a voice of your own</a>
@@ -484,22 +485,55 @@ writer with the number of words its moment will actually hold:</p>
 
 <p>Telling the model "shorter is better" was a wish. Telling it "seven words" is a constraint.</p>
 
-<h2 id="noyoutube">Why not YouTube</h2>
+<h2 id="youtube">Letting YouTube write it</h2>
 
-<p>The obvious idea &mdash; upload the video, let YouTube transcribe it, take the captions,
-delete the video. It does not work, for four separate reasons:</p>
+<p>YouTube's Persian is better than anything reachable through an API. So there is a second
+place the words can come from: <b>Settings → Where the words come from → Take it from
+YouTube</b>. The default is unchanged &mdash; leave it alone and everything works exactly as
+before.</p>
+
+<p>The one thing it needs is the video on your own channel, put there <b>by you</b>. Upload it
+as <b>Unlisted</b> through the website, wait a few minutes for the automatic captions, paste the
+link into <b>The YouTube link</b> on the Convert tab, and press Start.</p>
+
+<div class="good"><b>Setting it up, once</b>
+<ol>
+  <li>In the Google Cloud console, under <b>Google Auth Platform → Clients</b>, create an
+      OAuth client of type <b>Desktop app</b> and download its JSON.</li>
+  <li>Under <b>Data Access</b>, add the scope <code>youtube.force-ssl</code>.</li>
+  <li>Under <b>Audience</b>, press <b>Publish app</b>. Leave it on <i>Testing</i> and Google
+      expires your sign-in every seven days; in production it keeps working. Unverified is fine
+      — it only means a warning screen and a cap of 100 users, and you are one.</li>
+  <li>In this app: <b>Settings → Your YouTube sign-in → Choose client_secret.json</b>,
+      then <b>Sign in</b>. The browser opens once. Sign in with the account that owns the
+      channel, and click through the unverified-app warning — that is your own app.</li>
+</ol>
+The two files it keeps, <code>client_secret.json</code> and <code>youtube_token.json</code>, stay
+beside the app and are both in <code>.gitignore</code>.</div>
+
+<div class="warn"><b>It may still say no, and that is not a failure of the app</b>
+Google's own documentation does not say the machine-written captions can be downloaded, and many
+people report a 403 even for a video they own. If that happens you will see the exact refusal in
+the log and <b>the run carries on</b> — it transcribes here instead rather than stopping.
+Nothing is lost but a few seconds.</div>
+
+<h2 id="noyoutube">Why the app never uploads</h2>
+
+<p>The tempting version of this is: the app uploads the video, YouTube transcribes it, the app
+takes the captions and deletes the video. <b>It must not do that</b>, for one reason that is not
+negotiable and three that are merely bad:</p>
 
 <ul>
-  <li>An upload costs <b>1600 quota units</b>. The daily allowance is 10,000, so six videos a day.</li>
-  <li><code>captions.download</code> needs <b>OAuth</b>, not the API key you already have.</li>
-  <li>It only works for a video you own, and is widely reported to refuse the
-      <em>automatic</em> captions &mdash; which are the only ones a fresh upload has.</li>
-  <li>It means waiting on a queue you do not control, and then remembering to delete a private
-      lecture from the internet.</li>
+  <li><b>A video uploaded through an API project Google has not audited is locked private by
+      YouTube, and that cannot be appealed.</b> The only fix is to upload it again by hand. It is
+      not worth risking your channel to save you one drag-and-drop.</li>
+  <li>An upload costs <b>1600 quota units</b>. The daily allowance is 10,000, so six a day.</li>
+  <li>It means waiting on a queue you do not control.</li>
+  <li>And then remembering to delete a private lecture from the internet.</li>
 </ul>
 
-<p>Taking the audio out here is faster, predictable, cheaper, gives real timestamps, and leaves
-nothing anywhere that needs cleaning up.</p>
+<p>So you upload it, and the app only ever reads. Nothing is uploaded from here and nothing on
+your channel is touched or deleted.</p>
 
 <h2 id="privacy">What leaves this computer</h2>
 

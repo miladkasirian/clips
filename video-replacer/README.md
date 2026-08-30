@@ -19,7 +19,7 @@ nothing else to run and nothing to edit by hand.
 | **Convert** | the video, the language you spoke, where results go, whether to show you the English first, how much a line may be sped up — then **Start** |
 | **Voice** | every voice you can use. **Hear it** plays a sample. **Add a voice…** makes a new one from any recording |
 | **Words to keep right** | the glossary, for names it would otherwise get wrong |
-| **Settings** | your OpenAI key, ffmpeg, the local voice, and the models |
+| **Settings** | your OpenAI key, ffmpeg, the local voice, where the transcript comes from, and the models |
 
 **Remember these settings** next to Start writes everything into `config.json`,
 so the app opens the way you left it.
@@ -41,6 +41,27 @@ transcript came back identical.
 If you were already speaking English, this is a **rewrite, not a translation** —
 your words kept where they work, the false starts and the "um"s gone, and then the
 American voice you picked speaks it instead of you.
+
+### Letting YouTube write the transcript
+
+YouTube's Persian is better than anything reachable through an API. **Settings →
+Where the words come from → Take it from YouTube** switches to it. The default is
+unchanged; leave it alone and nothing about your runs changes.
+
+It only works for a video already on your channel, put there **by you**. Upload it
+Unlisted through the website, wait a few minutes for the automatic captions, paste
+the link into **The YouTube link** on the Convert tab, press Start.
+
+Setting it up once: in the Google Cloud console create an OAuth client of type
+**Desktop app**, add the scope `youtube.force-ssl` under Data Access, and press
+**Publish app** under Audience — left on *Testing*, Google expires your sign-in
+every seven days. Then in this app, **Settings → Choose client_secret.json**, then
+**Sign in**. The browser opens once.
+
+**The app never uploads anything.** A video uploaded through an API project Google
+has not audited is locked private by YouTube and that cannot be appealed. And if
+YouTube refuses the captions — which it may, and the log will say exactly why —
+the run does not stop, it transcribes here instead.
 
 ### The panel before it speaks
 

@@ -28,7 +28,8 @@ picture untouched and the sound in step with it, in that order:
   4. if it STILL will not fit, let it run over and say so in the report, so you
      can shorten that sentence yourself rather than find out in class.
 """
-import base64, json, os, re, shutil, subprocess, sys, tempfile, time
+import base64, hashlib, json, os, re, shutil, subprocess, sys, tempfile, time
+import urllib.error, urllib.parse, urllib.request
 if os.name == "nt":
     # a frozen app has no console; every helper must run without flashing one up
     _NOWINDOW = {"creationflags": 0x08000000}
@@ -93,6 +94,8 @@ DEFAULTS = {
     "longest_line": 10.0,            # fragments are joined into sentences up to this long
     "join_gap":     0.8,             # ...as long as the pause between them is under this
     "language":     "",              # "fa", "en"... blank lets it work the language out
+    "transcript_from": "here",       # "here" = OpenAI; "youtube" = your own upload
+    "youtube_link":    "",           # the unlisted video, when transcript_from is youtube
     "proofread":    True,            # repair the transcript's spelling before translating
     "review":       True,            # stop and show the English before speaking it
     "chunk_minutes": 12,             # transcription is sent in pieces this long
@@ -895,6 +898,210 @@ def clear_work(keep=False):
     return gone
 
 
+# ------------------------------------------------------- the YouTube transcript
+# YouTube's own machine writes better Persian than anything reachable through an
+# API, which is the whole reason this exists. What it will NOT do is transcribe a
+# file you hand it: the transcript belongs to a video on your channel, so the
+# video has to be on your channel first, and you have to put it there yourself.
+#
+# Not the app. A video uploaded through an API project Google has not audited is
+# locked private by YouTube and that cannot be appealed - so the app never
+# uploads anything. You upload it unlisted, paste the link, and it fetches the
+# words. Nothing is uploaded from here and nothing is deleted from your channel.
+YT_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl"
+YT_API = "https://www.googleapis.com/youtube/v3"
+YT_SECRET = os.path.join(HERE, "client_secret.json")
+YT_TOKEN = os.path.join(HERE, "youtube_token.json")
+
+
+def yt_client():
+    """The desktop client you downloaded from the Google console, or None."""
+    if not os.path.exists(YT_SECRET):
+        return None
+    try:
+        d = json.load(open(YT_SECRET, encoding="utf-8-sig"))
+        return d.get("installed") or d.get("web")
+    except Exception:
+        return None
+
+
+def yt_ready():
+    """(has the client file, is signed in) - what the Settings tab shows."""
+    return bool(yt_client()), os.path.exists(YT_TOKEN)
+
+
+def yt_video_id(text):
+    """Whatever was pasted, as the eleven characters that name the video."""
+    text = (text or "").strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", text):
+        return text
+    m = re.search(r"(?:v=|/shorts/|youtu\.be/|/embed/|/live/)([A-Za-z0-9_-]{11})", text)
+    return m.group(1) if m else None
+
+
+def _yt_form(url, fields):
+    body = urllib.parse.urlencode(fields).encode()
+    req = urllib.request.Request(url, data=body, method="POST",
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(e.read().decode("utf-8", "replace")[:300])
+
+
+def yt_sign_in(say=None):
+    """Once, in a browser. Google sends the answer back to a one-shot server on
+    this machine, so there is nothing to copy or paste by hand."""
+    import http.server, threading, webbrowser
+    app = yt_client()
+    if not app:
+        raise RuntimeError("client_secret.json is missing. Settings -> YouTube -> "
+                           "Choose the file you downloaded from Google.")
+    say = say or log
+    caught = {}
+
+    class Catch(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            caught.update(urllib.parse.parse_qsl(urllib.parse.urlparse(self.path).query))
+            page = ("<body style='font:16px system-ui;padding:60px;color:#111'>"
+                    "<h2>Done.</h2><p>Close this tab and go back to the app.</p>").encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Catch)
+    redirect = "http://localhost:%d/" % server.server_port
+    verifier = base64.urlsafe_b64encode(os.urandom(48)).rstrip(b"=").decode()
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    url = app["auth_uri"] + "?" + urllib.parse.urlencode({
+        "client_id": app["client_id"], "redirect_uri": redirect, "response_type": "code",
+        "scope": YT_SCOPE, "access_type": "offline", "prompt": "consent",
+        "code_challenge": challenge, "code_challenge_method": "S256"})
+
+    say("  A browser is opening. Sign in with the account that owns the channel.")
+    threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()
+    server.timeout = 300
+    server.handle_request()
+    server.server_close()
+    if "code" not in caught:
+        raise RuntimeError("Sign-in did not finish: %s"
+                           % (caught.get("error") or "the window was closed"))
+
+    tok = _yt_form(app["token_uri"], {
+        "code": caught["code"], "client_id": app["client_id"],
+        "client_secret": app["client_secret"], "redirect_uri": redirect,
+        "grant_type": "authorization_code", "code_verifier": verifier})
+    json.dump(tok, open(YT_TOKEN, "w"), indent=2)
+    say("  Signed in to YouTube.")
+    return tok["access_token"]
+
+
+def yt_access():
+    """A usable token, or None if it has to be signed in again. A refresh token
+    only dies on you while the app is left on Testing in the Google console -
+    publish it and it keeps working."""
+    app = yt_client()
+    if not app or not os.path.exists(YT_TOKEN):
+        return None
+    try:
+        saved = json.load(open(YT_TOKEN, encoding="utf-8"))
+        fresh = _yt_form(app["token_uri"], {
+            "refresh_token": saved["refresh_token"], "client_id": app["client_id"],
+            "client_secret": app["client_secret"], "grant_type": "refresh_token"})
+        saved.update(fresh)
+        json.dump(saved, open(YT_TOKEN, "w"), indent=2)
+        return saved["access_token"]
+    except Exception:
+        return None
+
+
+def yt_get(url, tok):
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok})
+    try:
+        with urllib.request.urlopen(req, timeout=90) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
+def _why(body):
+    try:
+        return json.loads(body)["error"]["message"]
+    except Exception:
+        return body.decode("utf-8", "replace")[:200]
+
+
+def parse_srt(text):
+    """SRT back into the same shape everything else here speaks: start, end and
+    the words. YouTube writes one cue per breath, which is exactly what merge()
+    expects to be handed."""
+    def secs(t):
+        h, m, rest = t.split(":")
+        s, ms = rest.replace(".", ",").split(",")
+        return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
+
+    out = []
+    for block in re.split(r"\r?\n\r?\n+", text.strip()):
+        lines = [l for l in block.splitlines() if l.strip()]
+        if len(lines) < 2:
+            continue
+        if lines[0].strip().isdigit():
+            lines = lines[1:]
+        m = re.match(r"\s*([\d:,.]+)\s*-->\s*([\d:,.]+)", lines[0] if lines else "")
+        if not m:
+            continue
+        said = re.sub(r"<[^>]+>", "", " ".join(lines[1:])).strip()
+        said = re.sub(r"\s+", " ", said)
+        if said:
+            out.append({"start": secs(m.group(1)), "end": secs(m.group(2)), "said": said})
+    return out
+
+
+def yt_transcript(link, say=None):
+    """The words YouTube heard, with their timings. Raises with a plain reason
+    if it cannot have them - the caller decides whether to fall back."""
+    say = say or log
+    vid = yt_video_id(link)
+    if not vid:
+        raise RuntimeError("That is not a YouTube link: %s" % (link or "(empty)"))
+    tok = yt_access()
+    if not tok:
+        raise RuntimeError("Not signed in to YouTube. Settings -> YouTube -> Sign in.")
+
+    status, body = yt_get("%s/captions?part=snippet&videoId=%s" % (YT_API, vid), tok)
+    if status != 200:
+        raise RuntimeError("YouTube would not list the captions (%d): %s" % (status, _why(body)))
+    tracks = json.loads(body).get("items") or []
+    if not tracks:
+        raise RuntimeError("That video has no captions yet. YouTube takes a few minutes "
+                           "to write them after an upload finishes.")
+
+    # the machine-made one is what we came for; a typed one is even better
+    tracks.sort(key=lambda t: 0 if t["snippet"].get("trackKind") != "ASR" else 1)
+    last = ""
+    for t in tracks:
+        s = t["snippet"]
+        made = "typed by hand" if s.get("trackKind") != "ASR" else "written by YouTube"
+        status, body = yt_get("%s/captions/%s?tfmt=srt" % (YT_API, t["id"]), tok)
+        if status == 200 and body.strip():
+            segs = parse_srt(body.decode("utf-8", "replace"))
+            if segs:
+                say("       %s, %s: %d lines" % (s.get("language") or "?", made, len(segs)))
+                return segs
+            last = "the track came back empty"
+        else:
+            last = _why(body)
+            say("       %s (%s) refused: %s" % (s.get("language") or "?", made, last))
+    raise RuntimeError("YouTube would not hand over any of its caption tracks. %s" % last)
+
+
 def convert(video, cfg=None, say=None, ask=None, out_dir=None):
     """The whole pipeline, once.
 
@@ -919,20 +1126,42 @@ def convert(video, cfg=None, say=None, ask=None, out_dir=None):
     total = duration(video)
     log("  %.0f minutes, %.0f MB\n" % (total / 60, os.path.getsize(video) / 1e6))
 
-    log("  1/6  taking the sound out (the video itself is never uploaded)")
     audio = os.path.join(folder, "voice.mp3")
-    if not os.path.exists(audio):
-        extract_audio(video, audio)
-    log("       %.1f MB of audio\n" % (os.path.getsize(audio) / 1e6))
+    segs_path = os.path.join(folder, "heard.json")
+    from_youtube = str(cfg.get("transcript_from", "here")).strip().lower() == "youtube"
+
+    def sound():
+        """The audio, made only if something here actually has to listen to it.
+        When YouTube supplies the words, nothing needs to."""
+        log("  1/6  taking the sound out (the video itself is never uploaded)")
+        if not os.path.exists(audio):
+            extract_audio(video, audio)
+        log("       %.1f MB of audio\n" % (os.path.getsize(audio) / 1e6))
+
+    if not from_youtube and not os.path.exists(segs_path):
+        sound()
 
     log("  2/6  writing down what you said")
-    segs_path = os.path.join(folder, "heard.json")
     if os.path.exists(segs_path):
         segs = json.load(open(segs_path, encoding="utf-8"))
         log("       (using what was already transcribed)")
     else:
-        pts = cut_points(audio, total, cfg["chunk_minutes"])
-        segs = transcribe(slice_audio(audio, pts, folder), cfg, k)
+        segs = []
+        if from_youtube:
+            # Its Persian is better than anything reachable through an API, so it
+            # is worth asking. If it says no, that is a fact to state out loud
+            # and carry on from, not a reason to stop the run.
+            log("       asking YouTube for the transcript of your upload")
+            try:
+                segs = yt_transcript(cfg.get("youtube_link", ""), log)
+            except Exception as e:
+                log("       YouTube could not: %s" % e)
+                log("       so it is being transcribed here instead.")
+            if not segs:
+                sound()
+        if not segs:
+            pts = cut_points(audio, total, cfg["chunk_minutes"])
+            segs = transcribe(slice_audio(audio, pts, folder), cfg, k)
         raw_count = len(segs)
         segs = merge(segs, float(cfg.get("longest_line", 10.0)), float(cfg.get("join_gap", 0.8)))
         log("     %d fragments joined into %d sentences" % (raw_count, len(segs)))

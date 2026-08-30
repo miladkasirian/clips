@@ -12,7 +12,7 @@ The pipeline is not duplicated here. replacer.convert() does the work and this
 hands it two things: somewhere to print, and a way to ask. That is why fixing
 the pipeline fixes both ways of running it.
 """
-import json, os, queue, subprocess, sys, threading, traceback
+import json, os, queue, shutil, subprocess, sys, threading, traceback
 
 if getattr(sys, "frozen", False):
     HERE = os.path.dirname(os.path.abspath(sys.executable))
@@ -129,6 +129,12 @@ class App(tk.Tk):
         ttk.Label(f, text="  any other ISO code can be typed here",
                   style="Dim.TLabel").pack(side="left")
 
+        f = self._row(one, "The YouTube link",
+                      "Only used when Settings says the words come from YouTube. Upload the "
+                      "video to your own channel as Unlisted first, then paste the link here.")
+        self.v_link = tk.StringVar(value=str(self.cfg.get("youtube_link", "")))
+        ttk.Entry(f, textvariable=self.v_link).pack(side="left", fill="x", expand=True)
+
         f = self._row(one, "Where the results go")
         self.v_out = tk.StringVar(value=os.path.join(HERE, "output"))
         ttk.Entry(f, textvariable=self.v_out).pack(side="left", fill="x", expand=True)
@@ -227,6 +233,33 @@ class App(tk.Tk):
         ttk.Checkbutton(f, variable=self.v_proof,
                         text="Tidy up the transcript's spelling before translating"
                         ).pack(side="left")
+
+        f = self._row(four, "Where the words come from",
+                      "YouTube's own machine writes better Persian than anything reachable "
+                      "through an API. It can only do it for a video already on your channel, "
+                      "which you upload yourself - this app never uploads anything.")
+        self.v_source = tk.StringVar(
+            value=str(self.cfg.get("transcript_from", "here")).lower())
+        ttk.Radiobutton(f, variable=self.v_source, value="here",
+                        text="Transcribe here  (works on any file, costs about 40\u00a2 an hour)"
+                        ).pack(anchor="w")
+        ttk.Radiobutton(f, variable=self.v_source, value="youtube",
+                        text="Take it from YouTube  (needs the video on your channel and a link "
+                             "on the Convert tab)").pack(anchor="w", pady=(2, 0))
+        ttk.Label(four, text="If YouTube refuses, the run does not stop \u2014 it says so and "
+                             "transcribes here instead.", style="Dim.TLabel").pack(anchor="w")
+
+        f = self._row(four, "Your YouTube sign-in",
+                      "One desktop client from the Google Cloud console, signed in once. "
+                      "Both files stay on this computer and neither goes into the repository.")
+        self.yt_lbl = ttk.Label(f, text="checking\u2026", style="Dim.TLabel")
+        self.yt_lbl.pack(side="left")
+        ttk.Button(f, text="Choose client_secret.json\u2026",
+                   command=self.pick_secret).pack(side="left", padx=10)
+        ttk.Button(f, text="Sign in", command=self.yt_sign_in).pack(side="left")
+        ttk.Label(four, text="In the Google console, set the app to In production rather than "
+                             "Testing \u2014 a Testing app makes you sign in again every 7 days.",
+                  style="Dim.TLabel").pack(anchor="w")
 
         f = self._row(four, "The local voice",
                       "Only needed for a voice of your own. A few gigabytes, installed in .venv "
@@ -349,7 +382,57 @@ class App(tk.Tk):
         self.status.config(text="key saved", foreground=OK)
         messagebox.showinfo("Saved", "The key is in key.txt beside this app.")
 
+    def yt_status(self):
+        """Says which of the two steps is still missing, rather than just 'no'."""
+        has, signed = R.yt_ready()
+        if not has:
+            self.yt_lbl.config(text="no client file yet", foreground=DIM)
+        elif not signed:
+            self.yt_lbl.config(text="client ready \u2014 not signed in", foreground=GOLD)
+        else:
+            self.yt_lbl.config(text="signed in", foreground=OK)
+
+    def pick_secret(self):
+        """The file Google gave you, copied into place by the app. There is
+        nothing to move by hand and nothing to rename."""
+        f = filedialog.askopenfilename(title="The client_secret file you downloaded",
+                                       filetypes=[("Google client secret", "*.json"),
+                                                  ("All files", "*.*")])
+        if not f:
+            return
+        try:
+            d = json.load(open(f, encoding="utf-8-sig"))
+            if not (d.get("installed") or d.get("web")):
+                raise ValueError("that is not an OAuth client file")
+            if os.path.abspath(f) != os.path.abspath(R.YT_SECRET):
+                shutil.copyfile(f, R.YT_SECRET)
+        except Exception as e:
+            messagebox.showwarning("Not that file", "%s\n\nIn the Google console it is under "
+                                   "Clients \u2192 your desktop client \u2192 Download JSON." % e)
+            return
+        self.yt_status()
+
+    def yt_sign_in(self):
+        """Opens the browser once. Nothing is typed or pasted by hand."""
+        if not R.yt_client():
+            messagebox.showinfo("One file first", "Press \u201cChoose client_secret.json\u201d "
+                                "and pick the file you downloaded from the Google Cloud console.")
+            return
+        self.nb.select(0)
+        self._log("\n  signing in to YouTube...\n")
+
+        def job():
+            try:
+                R.yt_sign_in(lambda m: self.q.put(("log", m + "\n")))
+                self.q.put(("log", "  Signed in. The Convert tab can use a YouTube link now.\n"))
+            except Exception as e:
+                self.q.put(("log", "  sign-in failed: %s\n" % e))
+            self.q.put(("yt", None))
+
+        threading.Thread(target=job, daemon=True).start()
+
     def check_tools(self):
+        self.yt_status()
         try:
             R.tool("ffmpeg"); self.ff_lbl.config(text="installed", foreground=OK)
         except SystemExit:
@@ -466,6 +549,8 @@ class App(tk.Tk):
         c["keep_work"] = bool(self.v_keepwork.get())
         c["language"] = R.language_code(self.v_lang.get())
         c["proofread"] = bool(self.v_proof.get())
+        c["transcript_from"] = self.v_source.get()
+        c["youtube_link"] = self.v_link.get().strip()
         for k, var in self.v_adv.items():
             raw = var.get().strip()
             if not raw:
@@ -545,6 +630,8 @@ class App(tk.Tk):
                     else:
                         self.tts_lbl.config(text="installed, on the processor (slow)",
                                             foreground=GOLD)
+                elif kind == "yt":
+                    self.yt_status()
                 elif kind == "samples":
                     self.refresh_voices()
                     self.status.config(text="samples ready", foreground=OK)

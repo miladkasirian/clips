@@ -245,6 +245,51 @@ def main():
           all(R.language_label(R.language_code(n)) == n for n in labels)
           and R.language_code("ja") == "ja", len(labels))
 
+    # --- YouTube's own transcript, when you ask for it ---
+    srt_text = ("1\n00:00:00,500 --> 00:00:04,000\n\u0633\u0644\u0627\u0645 <i>\u062e\u0648\u0628</i>\n"
+                "\n2\n00:00:04,000 --> 00:00:09,250\n\u062f\u0648\u0645\n\u062e\u0637\n\n"
+                "3\n00:00:09,250 --> 00:00:10,000\n\n")
+    cues = R.parse_srt(srt_text)
+    check(27, "YouTube's subtitles come back as lines with real timings",
+          len(cues) == 2 and abs(cues[0]["start"] - 0.5) < 1e-6
+          and abs(cues[1]["end"] - 9.25) < 1e-6
+          and "<i>" not in cues[0]["said"] and cues[1]["said"].count(" ") == 1,
+          cues)
+
+    asked = []
+    R.yt_transcript = lambda link, say=None: (
+        asked.append(link) or [{"start": a, "end": b, "said": fa} for a, b, fa, en in SAID])
+    yt = os.path.join(work, "yt")
+    R.WORK = yt
+    R.OUT = os.path.join(work, "out3")
+    R.config = lambda: dict(R.DEFAULTS, keep_work=True, proofread=False,
+                            transcript_from="youtube", youtube_link="https://youtu.be/abcdefghijk")
+    R.convert(video, say=lambda m: None, ask=lambda segs: segs)
+    heard = os.path.join(yt, "lecture", "heard.json")
+    voice = os.path.join(yt, "lecture", "voice.mp3")
+    check(28, "asking YouTube uses its words, and never touches the audio",
+          asked == ["https://youtu.be/abcdefghijk"] and os.path.exists(heard)
+          and not os.path.exists(voice)
+          and os.path.exists(os.path.join(work, "out3", "lecture.en.mp4")),
+          "audio made=%s" % os.path.exists(voice))
+
+    # --- and when YouTube says no, the run carries on rather than stopping ---
+    def refuse(link, say=None):
+        raise RuntimeError("no captions on that video")
+
+    R.yt_transcript = refuse
+    said = []
+    fell = os.path.join(work, "fell")
+    R.WORK = fell
+    R.OUT = os.path.join(work, "out4")
+    R.convert(video, say=lambda m: said.append(m), ask=lambda segs: segs)
+    check(29, "if YouTube refuses it says why and transcribes here instead",
+          os.path.exists(os.path.join(work, "out4", "lecture.en.mp4"))
+          and os.path.exists(os.path.join(fell, "lecture", "voice.mp3"))
+          and any("no captions on that video" in m for m in said),
+          [m.strip() for m in said if "YouTube" in m])
+
+    R.config = lambda: dict(R.DEFAULTS, keep_work=True, proofread=False)
     R.WORK = os.path.join(work, "work")
     R.OUT = os.path.join(work, "out")
     print("\n--- the report it wrote ---")
