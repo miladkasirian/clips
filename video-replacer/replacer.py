@@ -93,6 +93,8 @@ DEFAULTS = {
     "min_tempo":   0.90,
     "max_drift":   0.75,             # a line is never later than this behind its own moment
     "catch_up_tempo": 1.45,          # how hard it may hurry while it is behind
+    "squeeze_tempo": 1.60,           # ...and rather than cut a line short at all
+    "voice_rates":  {},              # words a second, measured once per voice
     "longest_line": 10.0,            # fragments are joined into sentences up to this long
     "join_gap":     0.8,             # ...as long as the pause between them is under this
     "language":     "",              # "fa", "en"... blank lets it work the language out
@@ -516,6 +518,140 @@ def translate(segs, cfg, k):
     return segs
 
 
+CALIBRATE = ("Alright, in this video I want to show you how this works, step by step, "
+             "so you can follow along and try it yourself afterwards.")
+
+
+def remember(cfg, key, value):
+    """Keep a measured fact in config.json without disturbing anything else."""
+    path = os.path.join(HERE, "config.json")
+    try:
+        have = json.load(open(path, encoding="utf-8-sig")) if os.path.exists(path) else {}
+    except Exception:
+        have = {}
+    have[key] = value
+    try:
+        json.dump(have, open(path, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+    cfg[key] = value
+
+
+def voice_rate(cfg, k, say=None):
+    """How fast THIS voice actually speaks, in words a second.
+
+    It matters which voice: a cloned voice and a ready-made one do not talk at
+    the same speed, and every decision about whether a line fits is made from
+    this number. Measured once per voice by saying one fixed sentence, then kept
+    in config.json - so it costs a fraction of a cent the first time each voice
+    is used and nothing ever again."""
+    say = say or log
+    who = str(cfg.get("voice", "onyx"))
+    rates = dict(cfg.get("voice_rates") or {})
+    if who in rates and 1.0 < float(rates[who]) < 6.0:
+        return float(rates[who])
+    tmp = os.path.join(tempfile.gettempdir(), "rate-%s.mp3" % re.sub(r"\W+", "_", who))
+    try:
+        speak(CALIBRATE, cfg, k, tmp)
+        secs = duration(tmp)
+        rate = len(CALIBRATE.split()) / secs if secs > 0.5 else WORDS_PER_SECOND
+    except Exception as e:
+        say("     (could not time the voice: %s - assuming %.1f words a second)"
+            % (str(e)[:60], WORDS_PER_SECOND))
+        return WORDS_PER_SECOND
+    finally:
+        try: os.remove(tmp)
+        except Exception: pass
+    rate = round(min(4.5, max(1.5, rate)), 3)
+    rates[who] = rate
+    remember(cfg, "voice_rates", rates)
+    say("     %s speaks at %.1f words a second" % (who, rate))
+    return rate
+
+
+SHORTEN = (
+    "You are trimming lines of a lecture's English so each one fits the moment of video it is "
+    "spoken over. You are given numbered lines, each with the MOST words it may have.\n"
+    "Rewrite each one to fit, keeping the meaning, the numbers, the names and the technical "
+    "terms exactly. Drop hedges, repetitions, filler and anything the picture already shows. "
+    "It must still sound like a lecturer talking to a room, not a telegram.\n"
+    "Never drop a fact to make room - cut a clause, not a fact.\n"
+    "Reply with a JSON object whose keys are the line numbers you were given and whose values "
+    "are the shortened English. Nothing else."
+)
+
+
+def room_for(segs, i, cfg, total=None):
+    """The seconds this line really has: its own moment, plus the lateness the
+    next line is allowed to absorb."""
+    nxt = segs[i + 1]["start"] if i + 1 < len(segs) else (
+        total if total else segs[i]["end"] + 3.0)
+    return max(0.4, (nxt + float(cfg.get("max_drift", 0.75))) - segs[i]["start"])
+
+
+def fit_english(segs, cfg, k, rate, total=None, say=None, rounds=2):
+    """Make every line short enough to be spoken in the time it has, BEFORE any
+    of it is spoken and before you are asked to approve it.
+
+    The old order asked you to approve English that had not been measured, and
+    then cut a sentence short during the run because it did not fit. Cutting is
+    still there as a last resort, but it should never be reached: a line that is
+    too long is rewritten shorter first, against the speed of the voice you
+    actually chose."""
+    say = say or log
+    # the limit here is the SQUEEZE, not the ordinary speed limit: a line is only
+    # rewritten when even speaking it as fast as the voice is ever allowed to go
+    # would not fit. Speaking faster keeps the meaning; rewriting risks it.
+    ceiling = max(float(cfg["max_tempo"]), float(cfg.get("catch_up_tempo", 1.45)),
+                  float(cfg.get("squeeze_tempo", 1.60)))
+    size = max(5, int(cfg.get("batch", 40)))
+
+    def too_long(i):
+        """Words over the limit for line i, or 0 if it fits."""
+        allowed = int(room_for(segs, i, cfg, total) * rate * ceiling)
+        segs[i]["fit"] = allowed          # what the panel shows you, per line
+        return max(0, len(segs[i]["en"].split()) - allowed), allowed
+
+    trimmed = 0
+    for _ in range(max(1, rounds)):
+        over = [i for i in range(len(segs)) if segs[i].get("en") and too_long(i)[0] > 0]
+        if not over:
+            break
+        for a in range(0, len(over), size):
+            part = over[a:a + size]
+            lines = "\n".join("%d. [at most %d words] %s"
+                              % (i + 1, too_long(i)[1], segs[i]["en"]) for i in part)
+            try:
+                body = json.dumps({"model": cfg["writer"], "temperature": 0.2,
+                                   "response_format": {"type": "json_object"},
+                                   "messages": [{"role": "system", "content": SHORTEN},
+                                                {"role": "user", "content": lines}]}).encode()
+                got = json.loads(json.loads(post(
+                    "https://api.openai.com/v1/chat/completions", body,
+                    {"Authorization": "Bearer " + k,
+                     "Content-Type": "application/json"}))["choices"][0]["message"]["content"])
+            except Exception as e:
+                say("     (could not shorten those lines: %s)" % str(e)[:70])
+                continue
+            for i in part:
+                new = got.get(str(i + 1))
+                new = re.sub(r"\s+", " ", str(new or "")).strip()
+                # only ever accept a rewrite that is actually shorter
+                if new and len(new.split()) < len(segs[i]["en"].split()):
+                    segs[i]["was"] = segs[i].get("was") or segs[i]["en"]
+                    segs[i]["en"] = new
+                    trimmed += 1
+
+    left = [i for i in range(len(segs)) if segs[i].get("en") and too_long(i)[0] > 0]
+    if trimmed:
+        say("     %d line%s too long even at %d%% speed - shortened, and marked for you"
+            % (trimmed, "" if trimmed == 1 else "s", round(ceiling * 100)))
+    if left:
+        say("     %d line%s still longer than %s can say in the time - they would be cut short"
+            % (len(left), " is" if len(left) == 1 else "s are", cfg.get("voice", "the voice")))
+    return segs, trimmed, left
+
+
 def trim_silence(src, dest, floor="-45dB"):
     """Half of a three-word clip came back as silence - measured. Over a lecture
     that is half a minute of dead air pushing every later line out of step.
@@ -828,6 +964,7 @@ def build_track(segs, cfg, folder, total, k):
     # alone instead of by everything after it.
     drift_cap = float(cfg.get("max_drift", 0.75))
     catch_up = max(float(cfg["max_tempo"]), float(cfg.get("catch_up_tempo", 1.45)))
+    squeeze = max(catch_up, float(cfg.get("squeeze_tempo", 1.60)))
 
     report, cursor = [], 0.0
     with open(raw_path, "r+b") as f:
@@ -838,7 +975,7 @@ def build_track(segs, cfg, folder, total, k):
             if not os.path.exists(mp3):
                 speak(s["en"], cfg, k, mp3)
             pcm = decode_pcm(mp3, rate)
-            want = len(pcm) / 2.0 / rate
+            natural = len(pcm) / 2.0 / rate
 
             # where it may start: after the line before it, but never further
             # behind its own moment than the cap allows
@@ -846,26 +983,33 @@ def build_track(segs, cfg, folder, total, k):
             late = start - s["start"]
             nxt = segs[i + 1]["start"] if i + 1 < len(segs) else total
             room = max(0.25, nxt - start)
+            allowed = (nxt + drift_cap) - start     # past this the next line suffers
 
+            # ONE decision about speed, in order of preference. Speaking faster
+            # keeps every word; cutting does not - so speed is tried first, and
+            # harder, before anything is ever thrown away.
             tempo = 1.0
-            if want > room:
-                # while behind, it is allowed to hurry harder than usual - that
-                # is what pays the lateness back instead of passing it on
-                tempo = min(want / room, catch_up if late > 0.05
+            if natural > room:
+                # while behind, it may hurry harder than usual: that is what pays
+                # the lateness back instead of passing it on
+                tempo = min(natural / room, catch_up if late > 0.05
                             else float(cfg["max_tempo"]))
-            elif late <= 0.05 and want < room * 0.55 and want > 0.6:
+            elif late <= 0.05 and natural < room * 0.55 and natural > 0.6:
                 # far too short for its slot: slow it very slightly rather than
                 # leaving a hole, but never below the floor. Not while behind -
                 # stretching a line when you are late is how you stay late.
-                tempo = max(float(cfg["min_tempo"]), want / (room * 0.8))
+                tempo = max(float(cfg["min_tempo"]), natural / (room * 0.8))
+            if natural / tempo > allowed + 0.02 and i + 1 < len(segs):
+                # it would otherwise have to be cut. Hurry as much as the squeeze
+                # limit permits first - a fast whole sentence beats half a slow one
+                tempo = min(squeeze, natural / allowed)
+
             if abs(tempo - 1.0) > 0.01:
                 pcm = decode_pcm(mp3, rate, tempo)
-                want = len(pcm) / 2.0 / rate
+            want = len(pcm) / 2.0 / rate
 
-            # and it may not run so far past its slot that the next line would
-            # start later than the cap allows. Cut with a short fade rather than
-            # a click, and say so - a truncated sentence is worth knowing about.
-            allowed = (nxt + drift_cap) - start
+            # and only if even that is not enough does anything get thrown away.
+            # Cut with a short fade rather than a click, and say so.
             cut = False
             if want > allowed + 0.02 and i + 1 < len(segs):
                 pcm = fade_tail(pcm[:int(allowed * rate) * 2], rate)
@@ -878,17 +1022,22 @@ def build_track(segs, cfg, folder, total, k):
             # simply too long for the moment it belongs to. Only the second is
             # something to go and fix.
             own = max(0.25, nxt - s["start"])
-            over = want - room
             if cut:
                 report.append((i, s["start"], "too long for its %.1fs and cut short to keep "
                                "the rest in step" % own, True))
-            elif want > own * float(cfg["max_tempo"]) + 0.05:
-                report.append((i, s["start"], "too long for its %.1fs: needs %.1fs of speech"
-                               % (own, want), True))
-            elif over > 0.05:
-                report.append((i, s["start"], "pushed %.1fs late by the lines before it" % late, False))
+            elif want > own + 0.05 and tempo >= squeeze - 0.01:
+                report.append((i, s["start"], "at %.0f%% and still longer than its %.1fs"
+                               % (tempo * 100, own), True))
+            elif late > 0.05:
+                # only worth saying when it is actually late. It used to report
+                # "pushed 0.0s late", which is not a fact about anything.
+                report.append((i, s["start"], "pushed %.1fs late by the lines before it" % late,
+                               False))
             elif tempo > 1.02:
                 report.append((i, s["start"], "sped up to %.0f%% to fit" % (tempo * 100), False))
+            elif tempo < 0.98:
+                report.append((i, s["start"], "slowed to %.0f%% to fill its moment"
+                               % (tempo * 100), False))
 
             at = int(start * rate) * 2
             if at + len(pcm) > frames * 2:
@@ -1339,6 +1488,11 @@ def convert(video, cfg=None, say=None, ask=None, out_dir=None):
         log("       (using the English already written)")
     else:
         segs = translate(segs, cfg, k)
+        # Measured against the voice you actually chose, and shortened where it
+        # will not fit - before you are asked to approve it, and before a word
+        # of it is spoken. Approving English that has not been measured is how a
+        # sentence ends up cut short halfway through the run.
+        segs, _, _ = fit_english(segs, cfg, k, voice_rate(cfg, k, log), total, log)
         json.dump(segs, open(en_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     log("       %s\n" % (segs[0].get("en", "")[:70]))
 

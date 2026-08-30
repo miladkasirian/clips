@@ -19,6 +19,7 @@ import replacer as R
 
 REAL_CONFIG = R.config          # main() stubs it out; the window needs the real one
 REAL_YT = R.yt_transcript      # and so does the check that the upload is deleted
+REAL_FIT, REAL_RATE = R.fit_english, R.voice_rate      # likewise, for the same reason
 
 ok = lambda b: "PASS" if b else "**FAIL**"
 fails = []
@@ -321,6 +322,19 @@ def sync_checks(work):
           len(culprits) == 1 and culprits[0][0] == 3,
           [(r[0], r[2][:38]) for r in report][:4])
 
+    # --- speaking faster is always tried before anything is thrown away ---
+    # 13 words in a 4s slot needs about 5.0s: too much for 145%, inside 160%
+    edge = [{"start": i * 4.0, "end": i * 4.0 + 3.0, "said": "x",
+             "en": " ".join(["word"] * (13 if i == 2 else 8))} for i in range(6)]
+    folder = os.path.join(work, "squeeze")
+    shutil.rmtree(folder, ignore_errors=True); os.makedirs(folder)
+    _, rep = R.build_track([dict(x) for x in edge],
+                           dict(R.DEFAULTS, sample_rate=rate), folder, 30.0, "k")
+    cut_now = [r for r in rep if "cut short" in r[2]]
+    hurried = [r for r in rep if "sped up" in r[2]]
+    check("38b", "a line that only just will not fit is hurried, never cut",
+          not cut_now and hurried, [(r[0], r[2][:34]) for r in rep])
+
     # --- the same lines, whoever wrote them down, land in the same place ---
     def track_of(name):
         folder = os.path.join(work, name)
@@ -331,6 +345,83 @@ def sync_checks(work):
 
     check(38, "the two ways of getting the words place the audio identically",
           track_of("from_whisper") == track_of("from_youtube"), "byte-for-byte")
+
+
+def fitting_checks(work):
+    """Nothing should ever be cut short, because nothing over-long should reach
+    the voice. Checked against a made-up voice with a known speaking speed, so
+    the arithmetic has a right answer rather than an opinion."""
+    said = []
+    R.log = lambda m: said.append(m)
+
+    lines = [{"start": i * 4.0, "end": i * 4.0 + 3.5, "said": "x",
+              "en": " ".join(["word"] * (10 if i != 2 else 40))} for i in range(6)]
+
+    # a writer that obeys the word limit it is given, which is what we are
+    # checking the caller asks for correctly
+    asked = []
+
+    def fake_post(url, body, headers):
+        import json as J
+        sent = J.loads(body)
+        text = sent["messages"][-1]["content"]
+        out = {}
+        for row in text.strip().splitlines():
+            n, rest = row.split(".", 1)
+            cap = int(re.search(r"at most (\d+) words", rest).group(1))
+            asked.append((int(n), cap))
+            out[n.strip()] = " ".join(["short"] * max(1, cap))
+        return J.dumps({"choices": [{"message": {"content": J.dumps(out)}}]})
+
+    import re
+    real_post, R.post = R.post, fake_post
+    try:
+        segs, trimmed, left = REAL_FIT([dict(s) for s in lines],
+                                            dict(R.DEFAULTS), "k", 2.5, 30.0)
+    finally:
+        R.post = real_post
+
+    caps = dict(asked)
+    # line 2 has 4.0s of slot plus 0.75s of allowed lateness, at 2.5 words a
+    # second and up to the 160% squeeze: about 19 words
+    check(39, "a line is only rewritten when even full speed would not save it",
+          list(caps) == [3] and 16 <= caps[3] <= 22, asked)
+    check(40, "and afterwards nothing is left that would have to be cut",
+          trimmed == 1 and not left and len(segs[2]["en"].split()) <= caps[3],
+          "%d trimmed, %d still long" % (trimmed, len(left)))
+    check("40b", "what it used to say is kept, so you can put your own words back",
+          segs[2].get("was") == " ".join(["word"] * 40),
+          (segs[2].get("was") or "")[:30])
+    check(41, "every line is told how many words it has room for",
+          all(isinstance(s.get("fit"), int) and s["fit"] > 0 for s in segs),
+          [s.get("fit") for s in segs])
+
+    # --- the voice is timed once and remembered ---
+    spoke = []
+
+    def fake_speak(text, cfg, k, dest):
+        spoke.append(text)
+        subprocess.run([R.tool("ffmpeg"), "-y", "-v", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=440:duration=%.3f" % (len(text.split()) / 3.0),
+                        "-c:a", "libmp3lame", "-b:a", "64k", dest], check=True)
+
+    was, R.speak = R.speak, fake_speak
+    saved = os.path.join(HERE, "config.json")
+    keep = open(saved, encoding="utf-8").read() if os.path.exists(saved) else None
+    try:
+        cfg = dict(R.DEFAULTS, voice="testvoice", voice_rates={})
+        first = REAL_RATE(cfg, "k")
+        second = REAL_RATE(cfg, "k")
+    finally:
+        R.speak = was
+        if keep is None:
+            if os.path.exists(saved): os.remove(saved)
+        else:
+            open(saved, "w", encoding="utf-8").write(keep)
+
+    check(42, "the voice is timed once, then remembered rather than timed again",
+          len(spoke) == 1 and abs(first - 3.0) < 0.25 and second == first,
+          "%.2f words a second, spoken %d time(s)" % (first, len(spoke)))
 
 
 def main():
@@ -347,6 +438,15 @@ def main():
         {"start": a, "end": b, "said": fa} for a, b, fa, en in SAID]
     R.translate = lambda segs, cfg, k: [
         dict(s, en=SAID[i][3]) for i, s in enumerate(segs)]
+    # fitting has its own checks below; here the deliberately over-long line has
+    # to survive so the last-resort cut can be seen doing its job
+    R.fit_english = lambda segs, *a, **kw: (segs, 0, [])
+    R.voice_rate = lambda cfg, k, say=None: 2.6
+
+    def no_network(*a, **kw):
+        raise AssertionError("the tests must not talk to anyone")
+
+    R.post = no_network
     R.WORK = os.path.join(work, "work")
     R.OUT = os.path.join(work, "out")
     R.key = lambda: "not-used"
@@ -552,6 +652,7 @@ def main():
     window_checks(work)
     youtube_checks(work)
     sync_checks(work)
+    fitting_checks(work)
     print("\n--- the report it wrote ---")
     print(rep.strip()[:700])
     shutil.rmtree(work, ignore_errors=True)

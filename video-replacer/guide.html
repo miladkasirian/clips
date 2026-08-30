@@ -127,6 +127,7 @@ footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:v
   <a href="#cost">What it costs</a>
   <a href="#pipeline">What happens, step by step</a>
   <a href="#fitting">Fitting English to the picture</a>
+  <a href="#howfast">How fast the voice talks</a>
   <a href="#drift">Why a line gets cut short</a>
   <a href="#privacy">What leaves the computer</a>
   <div class="grp">Reference</div>
@@ -791,13 +792,25 @@ your own Usage page. If a run ever fails saying a model does not exist, that is 
 <p>English is never the same length as the sentence it came from. That is the hard problem here,
 and it is solved in four stages, in this order:</p>
 
+<p><b>Speaking faster keeps every word. Anything else does not</b> &mdash; so speed is tried
+first, and tried hard, before a single word is given up. In order:</p>
+
 <ol class="steps">
+  <li><b>Before anything is spoken</b>, and before you are asked to approve it, every line is measured against <a href="#howfast">how fast the voice you picked actually talks</a>. A line that could not fit even at full speed is rewritten shorter <b>then</b>, so you see it in the review panel and can put your own words back.</li>
   <li><b>Say it at a natural speed.</b> If it fits, done.</li>
-  <li><b>Speed it up</b> &mdash; never past the limit on the Convert tab (120% by default). The filter used changes speed <b>without changing pitch</b>, so a hurried line still sounds like the same person rather than a chipmunk.</li>
+  <li><b>Speed it up</b> &mdash; up to the limit on the Convert tab, 120% by default. The filter used changes speed <b>without changing pitch</b>, so a hurried line still sounds like the same person rather than a chipmunk.</li>
   <li><b>Borrow the silence that follows it.</b> If you paused after that sentence, the English may run into the pause.</li>
   <li><b>Hurry harder while it is behind</b> &mdash; up to 145%, but only ever to make up time already lost.</li>
-  <li><b>And if it still will not fit, cut that line short</b> rather than letting it push everything after it out of step. It is named in the report as the cause.</li>
+  <li><b>Rather than cut anything at all, hurry harder still</b> &mdash; up to 160%. A fast whole sentence beats half a slow one.</li>
+  <li><b>Only then, cut the line short.</b> In practice step 1 means this almost never happens.</li>
 </ol>
+
+<h3 id="howfast">How fast does the voice talk?</h3>
+
+<p>It matters which voice, and it is not a guess. The first time you use a voice, the app has it
+say one fixed sentence and times it &mdash; a fraction of a cent, once &mdash; and keeps the
+answer in <code>config.json</code>. A cloned voice and a ready-made one do not speak at the same
+speed, and every decision about whether a line fits is made from that number.</p>
 
 <h3 id="drift">Why a line gets cut short</h3>
 
@@ -811,9 +824,10 @@ you are pointing at.</p>
 
 <div class="good"><b>Now the cost is paid by the sentence that caused it</b>
 No line is ever more than <b>0.75 seconds</b> behind its own moment. If an over-long sentence
-would push the next one further than that, its tail is cut &mdash; with a short fade, so it stops
-rather than clicks &mdash; and the report names it. The same test now measures a worst case of
-0.8 s, recovering on the very next line.</div>
+would push the next one further than that, it is spoken faster &mdash; up to 160% &mdash; and only
+if even that is not enough is its tail cut, with a short fade so it stops rather than clicks. The
+report names it either way. The same test now measures a worst case of 0.8 s, recovering on the
+very next line.</div>
 
 <p>Both numbers are on the Settings tab under "Rarely worth changing": <b>how far behind a line
 may ever fall</b>, and <b>how fast a line may be spoken while it is behind</b>. Setting the first
@@ -933,6 +947,7 @@ panel, and when you close the app.</p>
     <tr><td>Use the graphics card</td><td>on</td><td>Tick <b>before</b> pressing Install. <a href="#gpu">Why it matters so much.</a></td></tr>
     <tr><td>How far behind a line may ever fall</td><td>0.75 s</td><td>Past this it is cut short instead of pushing everything after it. <a href="#drift">Why.</a></td></tr>
     <tr><td>How fast while behind</td><td>1.45</td><td>Only ever used to make up time already lost.</td></tr>
+    <tr><td>How fast rather than cut at all</td><td>1.60</td><td>Speaking faster keeps every word; cutting does not, so this is tried first.</td></tr>
     <tr><td>Longest sentence</td><td>10.0 s</td><td>How long a joined sentence may get.</td></tr>
     <tr><td>A pause longer than this starts a new line</td><td>0.8 s</td><td>A real break, rather than a breath.</td></tr>
     <tr><td>Send to the transcriber in pieces of</td><td>12 min</td><td>Long lectures are cut at silences, never mid-word.</td></tr>

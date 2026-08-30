@@ -413,6 +413,7 @@ class App(tk.Tk):
         for i, (k, label, hint) in enumerate([
                 ("max_drift", "How far behind a line may ever fall (seconds)", "past this it is cut short rather than pushing everything after it out of step"),
                 ("catch_up_tempo", "How fast a line may be spoken while it is behind", "1.45 = up to 145%. Only ever used to make up lost time"),
+                ("squeeze_tempo", "How fast rather than cut a line short at all", "1.60. Speaking faster keeps every word; cutting does not, so this is tried first"),
                 ("longest_line", "Longest sentence (seconds)", "fragments closer than the gap below are joined up to this"),
                 ("join_gap", "A pause longer than this starts a new line", "seconds"),
                 ("chunk_minutes", "Send to the transcriber in pieces of", "minutes"),
@@ -858,10 +859,17 @@ class Review(tk.Toplevel):
         for i, s in enumerate(segs):
             card = ttk.Frame(inner, style="Card.TFrame", padding=10)
             card.pack(fill="x", pady=4, padx=(0, 12))
-            head = "%03d    %s – %s    (about %d words fit here)" % (
-                i + 1, R.clock(s["start"])[3:-4], R.clock(s["end"])[3:-4], R.budget(segs, i))
-            ttk.Label(card, text=head, style="CardDim.TLabel",
-                      font=("Consolas", 9)).pack(anchor="w")
+            fits = int(s.get("fit") or R.budget(segs, i))
+            head = "%03d    %s – %s    (%d words fit here)" % (
+                i + 1, R.clock(s["start"])[3:-4], R.clock(s["end"])[3:-4], fits)
+            hl = ttk.Label(card, text=head, style="CardDim.TLabel", font=("Consolas", 9))
+            hl.pack(anchor="w")
+            if s.get("was"):
+                # it was too long even at full speed, so it was rewritten shorter.
+                # You should see that, and you can put your own words back.
+                ttk.Label(card, text="shortened to fit — it read: " + s["was"],
+                          style="CardDim.TLabel", foreground=GOLD, wraplength=700,
+                          justify="left").pack(anchor="w", pady=(3, 0))
             fa = tk.Label(card, text=s["said"].strip(), bg=PAN, fg=DIM, wraplength=740,
                           justify="right", anchor="e", font=("Segoe UI", 10))
             fa.pack(fill="x", pady=(4, 6))
@@ -871,6 +879,21 @@ class Review(tk.Toplevel):
             box.insert("1.0", (s.get("en") or "").strip())
             box.pack(fill="x")
             self.boxes.append(box)
+
+            # live, while you type: this line has been measured against the voice
+            # you chose, and going past its allowance is what causes a cut
+            def watch(_=None, box=box, hl=hl, head=head, fits=fits):
+                n = len(box.get("1.0", "end-1c").split())
+                if n > fits:
+                    hl.config(text=head + "   — %d words: too long, it would be cut" % n,
+                              foreground=GOLD)
+                    box.config(highlightbackground=GOLD, highlightcolor=GOLD)
+                else:
+                    hl.config(text=head, foreground=DIM)
+                    box.config(highlightbackground=LINE, highlightcolor=LINE)
+
+            box.bind("<KeyRelease>", watch)
+            watch()
 
         bar = ttk.Frame(self, padding=(16, 8, 16, 14)); bar.pack(fill="x")
         ttk.Button(bar, text="Approve and make the video", style="Go.TButton",
