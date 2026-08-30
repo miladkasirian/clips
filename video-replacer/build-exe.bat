@@ -13,6 +13,7 @@ copy /y replacer.py "_build\replacer.py" >nul
 cd _build
 ".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --noconsole ^
   --name CourseVideoReplacer --distpath dist --workpath work --specpath . ^
+  --icon "..\icon.ico" ^
   --exclude-module torch --exclude-module TTS --exclude-module numpy ^
   --exclude-module matplotlib --exclude-module scipy --exclude-module pandas ^
   app_main.py

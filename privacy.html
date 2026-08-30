@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Course Video Replacer</title>
+<style>
+:root{
+  --bg:#070b14; --pan:#0d1424;
+  --line:rgba(255,255,255,.09);
+  --txt:#eef2fb; --dim:#98a5c2; --faint:#63718f;
+  --ok:#31e0c0; --blue:#4d8dff; --gold:#ffc861;
+  --font:"Segoe UI Variable Display","Segoe UI",Inter,system-ui,-apple-system,sans-serif;
+  --mono:"Cascadia Mono","SF Mono",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:var(--font);line-height:1.7;
+  -webkit-font-smoothing:antialiased;font-size:16px}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+   radial-gradient(60vw 60vw at 12% -10%, rgba(255,77,157,.12), transparent 60%),
+   radial-gradient(55vw 55vw at 92% 6%, rgba(24,201,168,.11), transparent 60%),
+   radial-gradient(50vw 50vw at 40% 108%, rgba(124,92,255,.12), transparent 60%)}
+main{max-width:760px;margin:0 auto;padding:56px 24px 96px}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-1.2px;line-height:1.1}
+h1 em{font-style:normal;background:linear-gradient(96deg,#ff5d8f,var(--gold) 48%,var(--ok));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{color:var(--dim);font-size:17px;margin-top:10px;max-width:60ch}
+.when{color:var(--faint);font-size:13px;margin-top:14px}
+h2{font-size:21px;font-weight:750;letter-spacing:-.5px;margin:44px 0 12px;
+  padding-top:22px;border-top:1px solid var(--line)}
+p{margin:12px 0}
+ul{margin:12px 0 12px 22px}
+li{margin:7px 0}
+code{font-family:var(--mono);font-size:.86em;background:rgba(255,255,255,.07);
+  border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--gold)}
+a{color:var(--blue)}
+b{font-weight:700}
+.box{background:var(--pan);border:1px solid var(--line);border-left:3px solid var(--ok);
+  border-radius:12px;padding:16px 20px;margin:20px 0}
+.box.no{border-left-color:#ff5f6d}
+.box b{display:block;margin-bottom:4px;font-size:13.5px;letter-spacing:.4px;color:var(--ok)}
+.box.no b{color:#ff5f6d}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:15px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:1.1px;text-transform:uppercase;color:var(--faint);font-weight:750}
+footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);
+  color:var(--faint);font-size:13.5px}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Privacy <em>Policy</em></h1>
+<p class="lede">Course Video Replacer — a desktop application used by one person to put an
+English voice on his own recorded university lectures.</p>
+<p class="when">Last updated: 30 August 2026</p>
+
+<h2>What this application is</h2>
+
+<p>Course Video Replacer runs entirely on the computer it is installed on. There is no
+website behind it, no account to create, no server that belongs to it, and no database.
+It is used by its author to prepare teaching material for his own courses.</p>
+
+<div class="box"><b>Nothing is collected</b>
+This application has no analytics, no telemetry, no crash reporting and no advertising.
+Its author receives no information about how, when, or whether it is used.</div>
+
+<h2>What it does with your YouTube account</h2>
+
+<p>If — and only if — you choose to sign in to YouTube inside the application, it asks
+Google for the scope <code>https://www.googleapis.com/auth/youtube.force-ssl</code>. It uses
+that permission for exactly two read-only calls, against a video you already own:</p>
+
+<ul>
+  <li><b>captions.list</b> — to see which subtitle tracks a video of yours has.</li>
+  <li><b>captions.download</b> — to read the text of one of those tracks, so the lecture can
+      be translated and re-voiced without transcribing the audio again.</li>
+</ul>
+
+<div class="box no"><b>What it never does</b>
+It does not upload videos. It does not create, edit, or delete videos, captions, playlists,
+comments, subscriptions or any other part of your channel. It does not read anything about
+other people's channels. It makes no write request of any kind to YouTube.</div>
+
+<p>The permission Google grants is broader than what the application uses, because
+<code>youtube.force-ssl</code> is the narrowest scope Google offers that allows reading a
+caption track at all. The application's source code is public and can be read at
+<a href="https://github.com/miladkasirian/clips/tree/main/video-replacer">github.com/miladkasirian/clips</a>.</p>
+
+<h2>Where your information is kept</h2>
+
+<table>
+  <thead><tr><th>What</th><th>Where it is stored</th></tr></thead>
+  <tbody>
+    <tr><td>Your Google sign-in token</td>
+        <td>In a file named <code>youtube_token.json</code>, in the application's own folder on
+            your computer. It is never transmitted anywhere except to Google, to renew itself.</td></tr>
+    <tr><td>Your OAuth client file</td>
+        <td><code>client_secret.json</code>, in the same folder. It comes from your own Google
+            Cloud project and never leaves the computer.</td></tr>
+    <tr><td>The caption text</td>
+        <td>Written into subtitle files beside the finished video, on your computer.</td></tr>
+    <tr><td>Work in progress</td>
+        <td>A <code>work</code> folder, emptied when the application is closed.</td></tr>
+  </tbody>
+</table>
+
+<p>None of these files are transmitted to the author of the application or to anyone else.
+There is nowhere for them to be transmitted to.</p>
+
+<h2>The one third party</h2>
+
+<p>When the application translates a lecture and speaks it, it sends text — and, when you have
+not supplied a YouTube transcript, the extracted audio — to <b>OpenAI</b>, using an API key
+that you supply yourself and that is billed to your own account. Their handling of it is
+governed by <a href="https://openai.com/policies/privacy-policy">OpenAI's privacy policy</a>.
+The video file itself is never sent to OpenAI or to anywhere else; it is only ever read and
+written on your own computer.</p>
+
+<h2>Taking the permission back</h2>
+
+<p>You can revoke this application's access to your Google account at any time, without
+asking anyone, at
+<a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
+Deleting <code>youtube_token.json</code> from the application's folder also signs it out.
+Neither action leaves anything behind elsewhere, because there is nowhere else.</p>
+
+<h2>Children</h2>
+
+<p>This application is a tool for preparing university teaching material. It is not directed
+at children and collects no information from anyone.</p>
+
+<h2>Changes</h2>
+
+<p>If what the application does with your data ever changes, this page changes with it, and
+the date at the top changes too.</p>
+
+<h2>Contact</h2>
+
+<p>Milad Kasirian — <a href="mailto:m6767m@gmail.com">m6767m@gmail.com</a></p>
+
+<footer>
+Course Video Replacer &middot; <a href="https://miladkasirian.github.io/clips/">miladkasirian.github.io/clips</a>
+</footer>
+
+</main>
+</body>
+</html>
