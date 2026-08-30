@@ -17,12 +17,12 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{background:var(--bg);color:var(--txt);font-family:var(--font);line-height:1.5;
-  font-size:15px;-webkit-font-smoothing:antialiased;overflow:hidden}
+  font-size:15px;-webkit-font-smoothing:antialiased;overflow:auto}
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:radial-gradient(70vw 70vw at 15% -12%, rgba(255,77,157,.11), transparent 62%),
              radial-gradient(60vw 60vw at 90% 8%, rgba(24,201,168,.10), transparent 62%)}
 
-.app{display:flex;flex-direction:column;height:100%;max-width:640px;margin:0 auto;
+.app{display:flex;flex-direction:column;min-height:100%;height:auto;max-width:640px;margin:0 auto;
   padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
 
 /* ---------- header ---------- */
@@ -58,8 +58,8 @@ header{flex:none}
 .tally .sp{flex:1}
 
 /* ---------- clip ---------- */
-main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9px;min-height:0;
-  padding-top:4px;overflow:hidden}
+main{flex:none;display:flex;flex-direction:column;justify-content:flex-start;gap:9px;min-height:0;
+  padding-top:4px;overflow:visible}
 .num{font-size:19px;font-weight:800;letter-spacing:-.4px}
 .num em{font-style:normal;color:var(--gold);font-weight:700;font-size:12.5px;margin-left:9px;
   letter-spacing:.3px}
@@ -81,21 +81,6 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
 .spin{width:30px;height:30px;border-radius:50%;border:2.5px solid rgba(255,255,255,.16);
   border-top-color:var(--ok);animation:rot .8s linear infinite}
 @keyframes rot{to{transform:rotate(360deg)}}
-
-/* ---------- transport ---------- */
-.tr{display:flex;align-items:center;gap:10px;flex:none;height:34px}
-.tb{flex:none;width:38px;height:34px;border-radius:10px;display:grid;place-items:center;cursor:pointer;
-  border:1px solid var(--line2);background:rgba(255,255,255,.06);color:var(--txt)}
-.tb:active{background:rgba(255,255,255,.16)}
-.tb svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.1;fill:none;stroke-linecap:round;stroke-linejoin:round}
-.tb.fill svg{fill:currentColor;stroke:none}
-.tt{flex:none;font-family:var(--mono);font-size:11px;color:var(--dim);min-width:34px;text-align:center}
-.track{flex:1;height:26px;display:flex;align-items:center;cursor:pointer;touch-action:none}
-.rail{position:relative;width:100%;height:5px;border-radius:99px;background:rgba(255,255,255,.14)}
-.rail i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:99px;
-  background:linear-gradient(90deg,var(--ok),var(--blue))}
-.rail b{position:absolute;top:50%;left:0;width:13px;height:13px;border-radius:50%;background:#fff;
-  transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,.6)}
 
 /* ---------- the note, beside the buttons ----------
    It used to be a single-line box on its own row above the buttons. On a short
@@ -173,9 +158,6 @@ main{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9p
 .notewrap .spk.busy{opacity:.55;pointer-events:none}
 /* The status line used to be one clipped 16px row, so "Sent. Writing it up..."
    was cut in half by the button under it. It now wraps and grows instead. */
-main{min-height:0}
-.shell{max-height:100%}
-#stage{min-height:0}
 .aistat{font-size:11.5px;line-height:1.5;color:var(--violet);letter-spacing:.2px;
   min-height:18px;padding:3px 2px 0;display:flex;align-items:flex-start;gap:6px}
 .aistat.bad{color:var(--no)}
@@ -358,17 +340,6 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
       <h3>Every clip decided</h3>
       <p id="doneText"></p>
     </div>
-    <div class="tr" id="tr" hidden>
-      <button class="tb fill" id="pp" type="button" aria-label="Play or pause">
-        <svg id="ppIcon" viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg>
-      </button>
-      <button class="tb" id="rew" type="button" aria-label="Back to the start">
-        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-      </button>
-      <span class="tt" id="tNow">0:00</span>
-      <div class="track" id="track"><div class="rail"><i id="tFill"></i><b id="tKnob"></b></div></div>
-      <span class="tt" id="tEnd">0:00</span>
-    </div>
   </main>
 
   <footer>
@@ -422,16 +393,15 @@ input.tok{width:100%;height:46px;border-radius:12px;padding:0 12px;font-family:v
         <svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg> Add links
       </button>
     </div>
-    <!-- one row, not two: a second full-width row pushed the footer 53px taller,
-         and on a short window that is exactly what put the video under the
-         buttons. Anything added here has to earn its height. -->
-    <div class="grid" style="margin-top:9px">
+    <div class="grid" style="margin-top:9px;grid-template-columns:1fr">
       <button class="act small" id="bExport" type="button">
         <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> <span id="bExportTxt">Export / publish</span>
       </button>
+    </div>
+    <div class="grid" style="margin-top:9px;grid-template-columns:1fr">
       <button class="act small" id="bSafe" type="button">
         <svg viewBox="0 0 24 24"><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
-        <span id="bSafeTxt">Back up / restore</span>
+        <span id="bSafeTxt">Notes &amp; voices &mdash; back up / restore</span>
       </button>
     </div>
     <p class="hint">Progress saves by itself &mdash; close this and come back any time.
@@ -611,8 +581,7 @@ var KEY      = "breaktime.review.v1";
 
 var $ = function(id){ return document.getElementById(id); };
 var pos=$("pos"), pfill=$("pfill"), nKeep=$("nKeep"), nDrop=$("nDrop"), nSkip=$("nSkip"), nLeft=$("nLeft"),
-    num=$("num"), stage=$("stage"), veil=$("veil"), tr=$("tr"), pp=$("pp"), ppIcon=$("ppIcon"), rew=$("rew"),
-    tNow=$("tNow"), tEnd=$("tEnd"), track=$("track"), tFill=$("tFill"), tKnob=$("tKnob"),
+    num=$("num"), stage=$("stage"), veil=$("veil"),
     bDrop=$("bDrop"), bKeep=$("bKeep"), bSkip=$("bSkip"), bUndo=$("bUndo"),
     donePanel=$("donePanel"), doneText=$("doneText"),
     bExport=$("bExport"), bReset=$("bReset"), sheet=$("sheet"), out=$("out"),
@@ -884,59 +853,14 @@ function paintCounts(){
   mAll.textContent  = "All but drops " + rest;
 }
 
-/* ---------------- transport (YouTube gives embeds no controls of their own) ---- */
-var TR = { on:false, dur:0, p:0, playing:false, drag:false, cmd:null };
-function clock(s){ s=Math.max(0,Math.round(s||0)); var m=Math.floor(s/60); s=s%60; return m+":"+(s<10?"0":"")+s; }
-/* The clip has to fit the room that is actually left, not a guess at it. A
-   fixed 46vh cap was a guess, and it was wrong the moment the footer grew by one
-   button row: main clipped the video and the buttons sat on top of it. Measure
-   the leftover and cap the WIDTH from it, so the ratio still sets the height. */
-var MAIN = document.querySelector("main");
-function fitStage(){
-  if(!MAIN || !stage) return;
-  var room = MAIN.clientHeight - num.offsetHeight - 14;
-  stage.style.maxWidth = room > 90 ? "min(100%," + Math.floor(room * 16 / 9) + "px)" : "";
-}
-window.addEventListener("resize", fitStage);
-window.addEventListener("orientationchange", fitStage);
-fitStage();
-
-function paintTR(){
-  var pct = TR.dur>0 ? Math.max(0,Math.min(TR.p,TR.dur))/TR.dur*100 : 0;
-  tFill.style.width=pct+"%"; tKnob.style.left=pct+"%";
-  tNow.textContent=clock(TR.p); tEnd.textContent=clock(TR.dur);
-  ppIcon.innerHTML = TR.playing
-    ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
-    : '<path d="M7 4l12 8-12 8z"/>';
-}
-function frac(ev){
-  var r=track.getBoundingClientRect(), x=(ev.touches&&ev.touches[0]?ev.touches[0].clientX:ev.clientX)-r.left;
-  return Math.max(0, Math.min(1, r.width ? x/r.width : 0));
-}
-function seekTo(t){ if(TR.cmd){ TR.cmd("seekTo",[t,true]); TR.cmd("playVideo"); } }
-track.addEventListener("click", function(ev){
-  if(!TR.on||!TR.dur) return; TR.p=frac(ev)*TR.dur; paintTR(); seekTo(TR.p);
-});
-function down(ev){ if(!TR.on||!TR.dur) return; TR.drag=true; TR.p=frac(ev)*TR.dur; paintTR(); ev.preventDefault(); }
-function move(ev){ if(TR.drag){ TR.p=frac(ev)*TR.dur; paintTR(); ev.preventDefault(); } }
-function up(){ if(!TR.drag) return; TR.drag=false; seekTo(TR.p); }
-track.addEventListener("mousedown",down); track.addEventListener("touchstart",down,{passive:false});
-window.addEventListener("mousemove",move); window.addEventListener("touchmove",move,{passive:false});
-window.addEventListener("mouseup",up);     window.addEventListener("touchend",up);
-pp.addEventListener("click", function(){
-  if(!TR.cmd) return;
-  if(TR.playing){ TR.cmd("pauseVideo"); TR.playing=false; }
-  else          { TR.cmd("playVideo");  TR.playing=true;  }
-  paintTR();
-});
-rew.addEventListener("click", function(){ TR.p=0; paintTR(); seekTo(0); });
+/* ---------------- YouTube player command state ---------------- */
+var TR = { playing:false, cmd:null };
 
 /* ---------------- mounting a clip ---------------- */
 function clearStage(){
   if(msgHook){ window.removeEventListener("message",msgHook); msgHook=null; }
   if(frame){ try{ frame.removeAttribute("src"); }catch(e){} frame.remove(); frame=null; }
-  TR.on=false; TR.cmd=null; TR.dur=0; TR.p=0; TR.playing=false;
-  tr.hidden=true; paintTR();
+  TR.cmd=null; TR.playing=false;
 }
 function mount(item){
   clearStage();
@@ -969,17 +893,10 @@ function mount(item){
     var d=e.data; if(typeof d==="string"){ try{ d=JSON.parse(d); }catch(x){ return; } }
     if(!d) return;
     if(d.event==="onReady"||d.event==="initialDelivery"){ cmd("playVideo"); }
-    if(d.info && (d.info.currentTime!==undefined || d.info.duration!==undefined)){
-      TR.on = true; tr.hidden = false;
-      if(typeof d.info.duration==="number" && d.info.duration>0) TR.dur=d.info.duration;
-      if(typeof d.info.currentTime==="number" && !TR.drag) TR.p=d.info.currentTime;
-      paintTR();
-    }
     var st = d.event==="onStateChange" ? d.info : (d.info && d.info.playerState);
     if(st===undefined||st===null) return;
     if(st===1||st===3){ veil.classList.add("gone"); }
     TR.playing = (st===1||st===3);
-    paintTR();
   };
   window.addEventListener("message",msgHook);
 
@@ -1013,7 +930,6 @@ function show(){
   num.innerHTML = "Clip " + pad(cur.n) +
     (STATE[cur.id]==="skip" ? "<em>skipped earlier</em>" : "");
   num.setAttribute("data-clip", pad(cur.n));
-  fitStage();
   pos.textContent = (ITEMS.length - c.left) + "/" + ITEMS.length;
   paintCounts();
   paintNote();
@@ -1053,7 +969,7 @@ function finished(){
   num.textContent = "";
   // hide the stage rather than removing it - Undo has to be able to bring a
   // clip straight back, and a torn-out stage would take its veil with it
-  stage.hidden = true; tr.hidden = true; donePanel.hidden = false;
+  stage.hidden = true; donePanel.hidden = false;
   doneText.innerHTML = "You kept <b>" + c.keep + "</b> and dropped <b>" + c.drop + "</b>.<br>" +
     "Press <b>Export list</b> to get the new links.txt.";
   bDrop.disabled = bKeep.disabled = bSkip.disabled = true;
@@ -1082,8 +998,6 @@ document.addEventListener("keydown", function(e){
   if(k==="k"){ e.preventDefault(); decide("keep"); }
   if(k==="s"){ e.preventDefault(); decide("skip"); }
   if(k==="u"){ e.preventDefault(); undo(); }
-  if(k==="r"){ e.preventDefault(); TR.p=0; paintTR(); seekTo(0); }
-  if(e.key===" "){ e.preventDefault(); pp.click(); }
 });
 
 /* =====================================================================
@@ -1506,7 +1420,7 @@ function pauseDeck(){
   try{
     // send it regardless of what we think the state is - the state arrives by
     // message and may not have caught up, and a pause on a paused clip is free
-    if(TR && TR.cmd){ TR.cmd("pauseVideo"); TR.playing = false; paintTR(); }
+    if(TR && TR.cmd){ TR.cmd("pauseVideo"); TR.playing = false; }
   }catch(e){}
 }
 function pauseAll(){
@@ -1936,7 +1850,7 @@ function paintSafeLede(){
   var c = safeCounts();
   safeLede.innerHTML = c.note + " of " + c.n + " clips have a note, " + c.voice +
     " have a spoken version. A backup is one small file &mdash; keep it before you change a lot at once.";
-  bSafeTxt.textContent = "Back up / restore";
+  bSafeTxt.textContent = "Notes & voices — back up / restore";
 }
 
 bSafe.addEventListener("click", function(){ paintSafeLede(); safeSay(""); sheetOpen(safeSheet); });
