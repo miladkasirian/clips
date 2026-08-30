@@ -337,9 +337,12 @@ class App(tk.Tk):
         ttk.Button(f, text="Install", command=self.install_voice).pack(side="left", padx=10)
         self.v_cuda = tk.BooleanVar(value=bool(self.cfg.get("use_gpu", True)))
         ttk.Checkbutton(four, variable=self.v_cuda,
-                        text="Use the graphics card (about 3GB more to download, "
-                             "several times faster). Untick only if it will not work."
+                        text="Use the graphics card"
                         ).pack(anchor="w", pady=(4, 0))
+        ttk.Label(four, text="About 3GB more to download and several times faster. An NVIDIA "
+                             "card is needed; without one it installs the processor build and "
+                             "works anyway, just slower. Untick only if the card will not work.",
+                  style="Dim.TLabel", wraplength=880, justify="left").pack(anchor="w")
 
         adv = ttk.Frame(four); adv.pack(fill="x", pady=(18, 0))
         ttk.Label(adv, text="Rarely worth changing", style="H.TLabel").pack(anchor="w")
@@ -352,16 +355,23 @@ class App(tk.Tk):
                 ("writer", "The model that writes the English", ""),
                 ("transcribe", "The model that listens", "whisper-1 is the only one that returns timestamps"),
                 ("speaker", "The ready-made voice model", "")]):
-            ttk.Label(g, text=label, style="Dim.TLabel").grid(row=i, column=0, sticky="w", pady=2)
-            var = tk.StringVar(value=str(self.cfg.get(k, "")))
-            ttk.Entry(g, textvariable=var, width=42).grid(row=i, column=1, sticky="w", padx=10)
+            cell = ttk.Frame(g)
+            cell.grid(row=i, column=0, sticky="w", pady=2)
+            ttk.Label(cell, text=label, style="Dim.TLabel").pack(anchor="w")
             if hint:
-                ttk.Label(g, text=hint, style="Dim.TLabel").grid(row=i, column=2, sticky="w")
+                ttk.Label(cell, text=hint, style="CardDim.TLabel", foreground=DIM,
+                          background=BG, wraplength=380, justify="left").pack(anchor="w")
+            var = tk.StringVar(value=str(self.cfg.get(k, "")))
+            ttk.Entry(g, textvariable=var, width=34).grid(row=i, column=1, sticky="w", padx=12)
             self.v_adv[k] = var
         self.v_keepwork = tk.BooleanVar(value=bool(self.cfg.get("keep_work", False)))
         ttk.Checkbutton(adv, variable=self.v_keepwork,
-                        text="Keep the working files, so a second run does not pay twice"
+                        text="Keep the working files"
                         ).pack(anchor="w", pady=(8, 0))
+        ttk.Label(adv, text="A second run then skips what is already done and does not pay for "
+                            "it twice. Off by default: what is in work\\ is a half-finished "
+                            "transcript of a lecture.",
+                  style="Dim.TLabel", wraplength=880, justify="left").pack(anchor="w")
         ttk.Label(adv, text="Everything on this page is saved when you tick “Remember these "
                             "settings” and press Start.", style="Dim.TLabel").pack(anchor="w", pady=(10, 0))
         self.after(200, self.check_tools)
