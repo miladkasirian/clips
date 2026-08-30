@@ -453,9 +453,31 @@ has to speak gives it far more to work with. Both were made and compared &mdash;
 <p>The first time a cloned voice is used the model downloads once, about 1.8GB. It needs
 <b>Setup-voice.bat</b> run once first; the ready-made voices need none of this.</p>
 
-<p><b>The cost is time, not money.</b> On the processor it runs at about 2.3&times; real time, so
-an hour of lecture takes over two hours. The graphics card would be several times faster but
-needs the CUDA build of torch, a 2.5GB download. XTTS-v2 is licensed for non-commercial use.</p>
+<h3>The graphics card, and why it was not being used</h3>
+
+<p>It was installed on the processor and quietly stayed there. The reason is a trap worth
+knowing: <b><code>pip install torch</code> on Windows gives you the CPU build.</b> Nothing warns
+you, nothing fails &mdash; it simply runs several times slower for ever. The CUDA build is on a
+separate index and has to be asked for by name.</p>
+
+<p>The tick box <b>Use the graphics card</b> next to Install asks for it. Measured on this
+machine, same voice, same sentence:</p>
+
+<table>
+  <thead><tr><th></th><th>Speed</th><th>An hour of lecture</th></tr></thead>
+  <tbody>
+    <tr><td>processor</td><td>2.3&times; real time</td><td>over two hours</td></tr>
+    <tr><td>graphics card (RTX 3050, 4GB)</td><td><b>0.7&times; real time</b></td><td><b>about forty minutes</b></td></tr>
+  </tbody>
+</table>
+
+<p>The Settings tab does not just say "installed" &mdash; it asks the installed torch which
+device it will actually use and reports that, because "installed" is exactly the word that hid
+this for a whole session.</p>
+
+<p>If the card has too little memory for the model, the voice moves to the processor by itself,
+mid-lecture if it has to, and says so in the log rather than losing the run. XTTS-v2 is licensed
+for non-commercial use.</p>
 
 <h2 id="own">Why it had to be local</h2>
 
@@ -498,11 +520,7 @@ Not Persian. The model copies the timbre from whatever it is given, and giving i
 has to speak gives it far more to work with. Put the recording at
 <code>voice\reference.wav</code>.</div>
 
-<p><b>The cost is time, not money.</b> On the processor it runs at 2.3&times; real time, so an
-hour of lecture takes over two hours. The graphics card would be several times faster, but that
-needs the CUDA build of torch &mdash; a 2.5GB download &mdash; and it is not worth doing until
-the voice is one you actually want to hear for an hour. XTTS-v2 is also licensed for
-non-commercial use.</p>
+
 
 <h2 id="measured">What was measured</h2>
 

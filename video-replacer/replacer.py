@@ -530,10 +530,38 @@ import sys, os
 os.environ.setdefault("COQUI_TOS_AGREED", "1")
 import torch
 from TTS.api import TTS
+
 ref = sys.argv[1]
-where = "cuda" if torch.cuda.is_available() else "cpu"
-tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(where)
-sys.stdout.write("READY %s\n" % where); sys.stdout.flush()
+MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
+
+# The graphics card if it is really there. "Really" means three things, and only
+# the first is about having one: the card, a CUDA build of torch (the plain
+# `pip install torch` on Windows is CPU-only, which is how this was silently on
+# the processor), and enough memory to hold the model.
+why = ""
+if not torch.cuda.is_available():
+    why = ("no CUDA build of torch" if torch.version.cuda is None
+           else "no card torch can reach")
+    where = "cpu"
+else:
+    where = "cuda"
+
+def load(dev):
+    t = TTS(MODEL).to(dev)
+    return t
+
+try:
+    tts = load(where)
+except Exception as e:
+    if where == "cuda":
+        why = "the card ran out of memory" if "memory" in str(e).lower() else str(e)[:70]
+        where = "cpu"
+        tts = load(where)
+    else:
+        raise
+
+sys.stdout.write("READY %s %s\n" % (where, why)); sys.stdout.flush()
+
 for line in sys.stdin:                      # "<destination wav>\t<text>"
     line = line.rstrip("\n")
     if not line: continue
@@ -542,6 +570,16 @@ for line in sys.stdin:                      # "<destination wav>\t<text>"
         tts.tts_to_file(text=text, speaker_wav=ref, language="en", file_path=dest)
         sys.stdout.write("OK\n")
     except Exception as e:
+        # a card that fills up part way through must not lose the whole lecture
+        if where == "cuda" and "memory" in str(e).lower():
+            try:
+                torch.cuda.empty_cache()
+                tts = load("cpu"); where = "cpu"
+                tts.tts_to_file(text=text, speaker_wav=ref, language="en", file_path=dest)
+                sys.stdout.write("OK moved to the processor - the card ran out of memory\n")
+                sys.stdout.flush(); continue
+            except Exception as e2:
+                e = e2
         sys.stdout.write("ERR %s\n" % str(e).replace("\n", " ")[:200])
     sys.stdout.flush()
 '''
@@ -567,9 +605,14 @@ def local_voice(cfg):
         first = p.stdout.readline().strip()
         if not first.startswith("READY"):
             raise RuntimeError("the local voice would not start: %s" % (first or "no answer"))
-        where = first.split()[-1]
-        log("       your voice is ready (%s)%s"
-            % (where, "" if where == "cuda" else " - the processor, so this part is slow"))
+        bits = first.split(None, 2)
+        where = bits[1] if len(bits) > 1 else "cpu"
+        why = bits[2] if len(bits) > 2 else ""
+        if where == "cuda":
+            log("       your voice is ready, on the graphics card")
+        else:
+            log("       your voice is ready, on the processor%s"
+                % (" (%s)" % why if why else "") + " - this part is slow")
         _local[0] = p
     return _local[0]
 
@@ -580,6 +623,8 @@ def speak_local(text, cfg, dest):
     p.stdin.write("%s\t%s\n" % (wav, re.sub(r"\s+", " ", text).strip()))
     p.stdin.flush()
     answer = p.stdout.readline().strip()
+    if answer.startswith("OK ") and len(answer) > 3:
+        log("       %s" % answer[3:])
     if not answer.startswith("OK"):
         raise RuntimeError("your voice could not say that line: %s" % answer[:180])
     run([tool("ffmpeg"), "-y", "-v", "error", "-i", wav, "-c:a", "libmp3lame", "-b:a", "128k", dest])

@@ -47,8 +47,13 @@ whatever it is given, and giving it the language it has to speak gives it far
 more to work with — compare `_your-cloned-voice.mp3` with
 `_cloned-from-persian.mp3` in `samples\`.
 
-It runs on this computer, so it costs nothing to use and nothing leaves. On the
-processor it is about 2.3× real time.
+It runs on this computer, so it costs nothing to use and nothing leaves.
+
+**Tick "Use the graphics card"** when installing. `pip install torch` on Windows
+gives the CPU build and nothing warns you — measured here, the card is
+**0.7× real time against 2.3× on the processor**, so an hour of lecture takes
+forty minutes instead of over two hours. If the card runs out of memory the voice
+moves to the processor by itself and says so.
 
 ## What happens, and where
 

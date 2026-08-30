@@ -202,6 +202,11 @@ class App(tk.Tk):
         self.tts_lbl = ttk.Label(f, text="checking\u2026", style="Dim.TLabel")
         self.tts_lbl.pack(side="left")
         ttk.Button(f, text="Install", command=self.install_voice).pack(side="left", padx=10)
+        self.v_cuda = tk.BooleanVar(value=True)
+        ttk.Checkbutton(four, variable=self.v_cuda,
+                        text="Use the graphics card (about 3GB more to download, "
+                             "several times faster). Untick only if it will not work."
+                        ).pack(anchor="w", pady=(4, 0))
 
         adv = ttk.Frame(four); adv.pack(fill="x", pady=(18, 0))
         ttk.Label(adv, text="Rarely worth changing", style="H.TLabel").pack(anchor="w")
@@ -319,8 +324,20 @@ class App(tk.Tk):
             self.ff_lbl.config(text="missing - press Get it", foreground=GOLD)
         except Exception:
             self.ff_lbl.config(text="missing - press Get it", foreground=GOLD)
-        self.tts_lbl.config(**({"text": "installed", "foreground": OK} if R.venv_python()
-                               else {"text": "not installed", "foreground": DIM}))
+        py = R.venv_python()
+        if not py:
+            self.tts_lbl.config(text="not installed", foreground=DIM); return
+        # "installed" is not the useful fact. Which device it will actually use is.
+        def look():
+            try:
+                r = subprocess.run(
+                    [py, "-c", "import torch;print(torch.cuda.is_available(), torch.version.cuda)"],
+                    capture_output=True, text=True, timeout=90, **R._NOWINDOW)
+                self.q.put(("tts", (r.stdout or "").strip()))
+            except Exception as e:
+                self.q.put(("tts", "? %s" % e))
+        threading.Thread(target=look, daemon=True).start()
+        self.tts_lbl.config(text="installed, checking the card\u2026", foreground=DIM)
 
     def get_ffmpeg(self):
         """Fetched by the app. Nothing to run, nothing to unzip by hand."""
@@ -372,10 +389,17 @@ class App(tk.Tk):
                     self.q.put(("tools", None)); return
             steps = [[py, "-m", "venv", venv]]
             vpy = os.path.join(venv, "Scripts", "python.exe")
+            # The graphics card is not automatic. `pip install torch` on Windows
+            # gives the CPU wheel and nothing warns you - the app simply runs
+            # five times slower for ever. The CUDA build lives on its own index.
+            # torch 2.8 on purpose: 2.9 wants torchcodec, which needs ffmpeg DLLs
+            # the static Windows build does not ship.
+            cuda = self.v_cuda.get()
+            torch_args = ["torch==2.8.0", "torchaudio==2.8.0"]
+            if cuda:
+                torch_args = ["--index-url", "https://download.pytorch.org/whl/cu126"] + torch_args
             steps += [[vpy, "-m", "pip", "install", "--upgrade", "pip"],
-                      # torch 2.8 on purpose: 2.9 wants torchcodec, which needs
-                      # ffmpeg DLLs the static Windows build does not ship
-                      [vpy, "-m", "pip", "install", "torch==2.8.0", "torchaudio==2.8.0"],
+                      [vpy, "-m", "pip", "install"] + torch_args,
                       [vpy, "-m", "pip", "install", "coqui-tts", "transformers<5"]]
             for i, cmd in enumerate(steps, 1):
                 self.q.put(("log", "  step %d of %d...\n" % (i, len(steps))))
@@ -476,6 +500,17 @@ class App(tk.Tk):
                     self._log(payload)
                 elif kind == "tools":
                     self.check_tools()
+                elif kind == "tts":
+                    if payload.startswith("True"):
+                        self.tts_lbl.config(text="installed, using the graphics card",
+                                            foreground=OK)
+                    elif payload.startswith("False None"):
+                        self.tts_lbl.config(
+                            text="installed, but the CPU build \u2014 press Install again with "
+                                 "the card ticked", foreground=GOLD)
+                    else:
+                        self.tts_lbl.config(text="installed, on the processor (slow)",
+                                            foreground=GOLD)
                 elif kind == "samples":
                     self.refresh_voices()
                     self.status.config(text="samples ready", foreground=OK)

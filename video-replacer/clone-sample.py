@@ -18,7 +18,8 @@ sys.path.insert(0, HERE)
 os.environ.setdefault("COQUI_TOS_AGREED", "1")     # the model's licence prompt
 import replacer as R
 
-REF = os.path.join(HERE, "voice", "reference.wav")
+# whichever voice the app is set to, or the first one in the folder
+REF = R.reference(R.config()) or ""
 OUT = os.path.join(HERE, "samples")
 
 # the same words the eleven preset voices said, so it is a fair comparison
@@ -26,8 +27,8 @@ SAMPLE = ("Alright, in this video I want to show you how to use this website. "
           "You will see the list of chapters, the resources for each week, and "
           "where to hand your work in.")
 
-if not os.path.exists(REF):
-    R.die("There is no reference recording at voice\\reference.wav")
+if not REF or not os.path.exists(REF):
+    R.die("There is no recording in voice\\ to copy. Add one in the app first.")
 
 import torch
 from TTS.api import TTS
