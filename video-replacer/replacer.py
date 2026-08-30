@@ -85,13 +85,25 @@ def key():
 
 
 def tool(name):
-    """ffmpeg from PATH, or the portable copy Setup.bat unpacks beside this."""
-    local = os.path.join(HERE, "ffmpeg", "bin", name + ".exe")
-    if os.path.exists(local):
-        return local
+    """ffmpeg, wherever it ended up.
+
+    PATH first, then the portable copy Setup.bat unpacks beside this, then the
+    folder winget installs into - because winget adds itself to PATH for shells
+    started AFTERWARDS, and the one you are in was started before. Looking there
+    is the difference between "run Setup.bat" and "it says ffmpeg is missing and
+    I just installed it".
+    """
     found = shutil.which(name)
     if found:
         return found
+    local = os.path.join(HERE, "ffmpeg", "bin", name + ".exe")
+    if os.path.exists(local):
+        return local
+    packages = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Packages")
+    if os.path.isdir(packages):
+        for root, dirs, files in os.walk(packages):
+            if name + ".exe" in files and os.path.basename(root).lower() == "bin":
+                return os.path.join(root, name + ".exe")
     die("%s is not installed. Run Setup.bat once - it fetches it." % name)
 
 
