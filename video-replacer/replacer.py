@@ -45,6 +45,44 @@ else:
 WORK = os.path.join(HERE, "work")
 OUT  = os.path.join(HERE, "output")
 
+# whisper knows about a hundred languages and works out which one it is hearing on
+# its own, which is right nearly always. Naming it only matters when a lecture is
+# genuinely bilingual and the guess wanders. These are the ones worth a list; any
+# other ISO code can be typed straight into the box.
+LANGUAGES = [
+    ("Work it out from the audio", ""),
+    ("Persian \u0641\u0627\u0631\u0633\u06cc", "fa"),
+    ("English", "en"),
+    ("Hindi \u0939\u093f\u0928\u094d\u0926\u0940", "hi"),
+    ("Arabic \u0627\u0644\u0639\u0631\u0628\u064a\u0629", "ar"),
+    ("Urdu \u0627\u0631\u062f\u0648", "ur"),
+    ("Turkish", "tr"),
+    ("French", "fr"),
+    ("German", "de"),
+    ("Spanish", "es"),
+    ("Russian", "ru"),
+    ("Chinese", "zh"),
+]
+
+
+def language_label(code):
+    """The code stored in config, as something a person reads."""
+    code = str(code or "").strip().lower()
+    for name, c in LANGUAGES:
+        if c == code:
+            return name
+    return code          # an ISO code typed by hand is shown as typed
+
+
+def language_code(label):
+    """What the person picked or typed, as the code whisper wants."""
+    label = str(label or "").strip()
+    for name, c in LANGUAGES:
+        if name == label:
+            return c
+    return label.lower()
+
+
 DEFAULTS = {
     "transcribe":  "whisper-1",      # the ONLY model that returns timestamps
     "writer":      "gpt-4o",         # Persian/English -> natural American English
@@ -405,8 +443,10 @@ def proofread(segs, cfg, k):
 
 TRANSLATE = (
     "You are turning a university lecturer's own recording into the English he would have "
-    "spoken himself. The input may be Persian or English, and it is speech, so it rambles, "
-    "repeats and restarts.\n"
+    "spoken himself. He may have lectured in any language - do not assume which one - and it "
+    "is speech, so it rambles, repeats and restarts.\n"
+    "If he was already speaking English, this is a rewrite and not a translation: keep his own "
+    "words wherever they work, and only fix what a listener would stumble over.\n"
     "Rewrite each numbered line as natural, idiomatic American English - the way a lecturer "
     "actually talks to a room, not written prose. Fix every grammatical error. Keep his "
     "meaning, his emphasis and his examples exactly; keep every number, name and technical "

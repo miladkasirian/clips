@@ -120,6 +120,15 @@ class App(tk.Tk):
         ttk.Entry(f, textvariable=self.v_in).pack(side="left", fill="x", expand=True)
         ttk.Button(f, text="Choose…", command=self.pick_in).pack(side="left", padx=(8, 0))
 
+        f = self._row(one, "The language you speak in the video",
+                      "It works this out from the audio on its own, and English is what comes "
+                      "out whichever language went in. Name it only if the guess wanders.")
+        self.v_lang = tk.StringVar(value=R.language_label(self.cfg.get("language", "")))
+        ttk.Combobox(f, textvariable=self.v_lang, width=28,
+                     values=[n for n, _ in R.LANGUAGES]).pack(side="left")
+        ttk.Label(f, text="  any other ISO code can be typed here",
+                  style="Dim.TLabel").pack(side="left")
+
         f = self._row(one, "Where the results go")
         self.v_out = tk.StringVar(value=os.path.join(HERE, "output"))
         ttk.Entry(f, textvariable=self.v_out).pack(side="left", fill="x", expand=True)
@@ -211,14 +220,13 @@ class App(tk.Tk):
         self.ff_lbl.pack(side="left")
         ttk.Button(f, text="Get it", command=self.get_ffmpeg).pack(side="left", padx=10)
 
-        f = self._row(four, "Language you speak in the video",
-                      "fa for Persian, en for English. Leave it blank to let it work out.")
-        self.v_lang = tk.StringVar(value=str(self.cfg.get("language", "")))
-        ttk.Entry(f, textvariable=self.v_lang, width=10).pack(side="left")
+        f = self._row(four, "The transcript",
+                      "A pass over what you were heard to say, fixing spelling and word "
+                      "boundaries only. It is forbidden to invent a word to fill a gap.")
         self.v_proof = tk.BooleanVar(value=bool(self.cfg.get("proofread", True)))
         ttk.Checkbutton(f, variable=self.v_proof,
                         text="Tidy up the transcript's spelling before translating"
-                        ).pack(side="left", padx=16)
+                        ).pack(side="left")
 
         f = self._row(four, "The local voice",
                       "Only needed for a voice of your own. A few gigabytes, installed in .venv "
@@ -456,7 +464,7 @@ class App(tk.Tk):
         c["max_tempo"] = round(float(self.v_tempo.get()), 3)
         c["review"] = bool(self.v_review.get())
         c["keep_work"] = bool(self.v_keepwork.get())
-        c["language"] = self.v_lang.get().strip()
+        c["language"] = R.language_code(self.v_lang.get())
         c["proofread"] = bool(self.v_proof.get())
         for k, var in self.v_adv.items():
             raw = var.get().strip()

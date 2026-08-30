@@ -16,7 +16,7 @@ nothing else to run and nothing to edit by hand.
 
 | Tab | What is in it |
 |---|---|
-| **Convert** | the video, where results go, whether to show you the English first, how much a line may be sped up — then **Start** |
+| **Convert** | the video, the language you spoke, where results go, whether to show you the English first, how much a line may be sped up — then **Start** |
 | **Voice** | every voice you can use. **Hear it** plays a sample. **Add a voice…** makes a new one from any recording |
 | **Words to keep right** | the glossary, for names it would otherwise get wrong |
 | **Settings** | your OpenAI key, ffmpeg, the local voice, and the models |
@@ -26,6 +26,21 @@ so the app opens the way you left it.
 
 The first time: go to **Settings**, paste your OpenAI key, press **Save**. If
 ffmpeg says *missing*, press **Get it** — the app fetches it itself.
+
+### Any language in, English out
+
+The transcriber knows about a hundred languages and works out which one it is
+hearing on its own, so a lecture in Hindi is the same run as one in Persian:
+choose the file and press Start. The dropdown on **Convert** is there for the one
+case that needs it — a lecture that switches between two languages, where the
+guess can wander. Any ISO code can be typed into it.
+
+Measured on a real Persian lecture, naming the language changed *nothing*: the
+transcript came back identical.
+
+If you were already speaking English, this is a **rewrite, not a translation** —
+your words kept where they work, the false starts and the "um"s gone, and then the
+American voice you picked speaks it instead of you.
 
 ### The panel before it speaks
 

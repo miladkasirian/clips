@@ -84,6 +84,7 @@ def main():
     build_input(video)
     print("   made a %.0f-second test lecture\n" % TOTAL)
 
+    real_transcribe = R.transcribe        # kept, so test 24 can ask the real one
     R.speak = fake_speak
     R.transcribe = lambda chunks, cfg, k: [
         {"start": a, "end": b, "said": fa} for a, b, fa, en in SAID]
@@ -215,6 +216,34 @@ def main():
     R.clear_work(keep=False)
     now = os.listdir(left) if os.path.isdir(left) else []
     check(23, "closing clears the work folder", kept and not now, "kept-when-asked=%s" % kept)
+
+    # --- the language you pick is the language whisper is told, and no more ---
+    sent = []
+    real_multipart, real_post = R.multipart, R.post
+
+    def spy(fields, name, data):
+        sent.append(dict(fields))
+        return b"", "text/plain"
+
+    R.multipart = spy
+    R.post = lambda *a, **k: json.dumps({"segments": []})
+    try:
+        real_transcribe([(video, 0.0)], dict(R.DEFAULTS, language="hi"), "k")
+        real_transcribe([(video, 0.0)], dict(R.DEFAULTS, language=""), "k")
+    finally:
+        R.multipart, R.post = real_multipart, real_post
+    check(24, "the language you pick is passed on, and blank is left out",
+          sent[0].get("language") == "hi" and "language" not in sent[1],
+          [f.get("language", "<omitted>") for f in sent])
+
+    check(25, "any language, not only Persian, and English in is a rewrite",
+          "Persian or English" not in R.TRANSLATE and "any language" in R.TRANSLATE
+          and "already speaking English" in R.TRANSLATE)
+
+    labels = [n for n, _ in R.LANGUAGES]
+    check(26, "every language in the list survives the trip to config and back",
+          all(R.language_label(R.language_code(n)) == n for n in labels)
+          and R.language_code("ja") == "ja", len(labels))
 
     R.WORK = os.path.join(work, "work")
     R.OUT = os.path.join(work, "out")
