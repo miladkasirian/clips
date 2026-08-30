@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Course Video Replacer — Guide</title>
+<style>
+:root{
+  --bg:#070b14; --pan:#0d1424; --pan2:#131c30;
+  --line:rgba(255,255,255,.09); --line2:rgba(255,255,255,.17);
+  --txt:#eef2fb; --dim:#98a5c2; --faint:#63718f;
+  --ok:#31e0c0; --blue:#4d8dff; --gold:#ffc861; --no:#ff5f6d; --violet:#a78bfa;
+  --font:"Segoe UI Variable Display","Segoe UI",Inter,system-ui,-apple-system,sans-serif;
+  --mono:"Cascadia Mono","SF Mono",Consolas,"Roboto Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{background:var(--bg);color:var(--txt);font-family:var(--font);line-height:1.68;
+  -webkit-font-smoothing:antialiased;font-size:15.5px}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+   radial-gradient(60vw 60vw at 12% -10%, rgba(255,77,157,.13), transparent 60%),
+   radial-gradient(55vw 55vw at 92% 6%, rgba(24,201,168,.12), transparent 60%),
+   radial-gradient(50vw 50vw at 40% 108%, rgba(124,92,255,.13), transparent 60%)}
+
+.shell{display:grid;grid-template-columns:264px 1fr;gap:44px;max-width:1240px;margin:0 auto;padding:38px 28px 90px}
+nav{position:sticky;top:24px;align-self:start;max-height:calc(100vh - 48px);overflow:auto}
+nav .brand{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+nav .brand .mk{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:19px;
+  background:linear-gradient(140deg,var(--ok),var(--blue));box-shadow:0 8px 22px -8px var(--ok)}
+nav .brand b{font-size:16px;font-weight:750;letter-spacing:-.2px;display:block}
+nav .brand small{font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--faint);font-weight:700}
+nav a{display:block;padding:6px 12px;border-radius:8px;color:var(--dim);text-decoration:none;font-size:13.5px;
+  border-left:2px solid transparent;transition:.14s}
+nav a:hover{color:var(--txt);background:rgba(255,255,255,.045);border-left-color:var(--ok)}
+nav .grp{font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--faint);font-weight:750;
+  padding:16px 12px 5px}
+
+main{min-width:0}
+h1{font-size:clamp(30px,4.4vw,44px);font-weight:800;letter-spacing:-1.3px;line-height:1.08;margin-bottom:12px}
+h1 em{font-style:normal;background:linear-gradient(96deg,#ff5d8f,var(--gold) 48%,var(--ok));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:17px;color:var(--dim);max-width:64ch;margin-bottom:8px}
+h2{font-size:23px;font-weight:750;letter-spacing:-.6px;margin:52px 0 14px;padding-top:14px;
+  border-top:1px solid var(--line)}
+h2:first-of-type{border-top:0}
+h3{font-size:16.5px;font-weight:700;margin:26px 0 9px;color:var(--txt)}
+h4{font-size:14px;font-weight:700;margin:18px 0 6px;color:var(--dim)}
+p{margin:10px 0;max-width:76ch}
+ul,ol{margin:10px 0 10px 22px;max-width:74ch}
+li{margin:5px 0}
+a{color:var(--blue)}
+code{font-family:var(--mono);font-size:.875em;background:rgba(255,255,255,.07);border:1px solid var(--line);
+  border-radius:5px;padding:1px 6px;color:var(--gold);white-space:nowrap}
+pre{background:#05080f;border:1px solid var(--line);border-radius:12px;padding:15px 17px;overflow-x:auto;margin:13px 0}
+pre code{background:none;border:0;padding:0;color:#cfe0ff;white-space:pre;font-size:12.8px;line-height:1.65}
+kbd{font-family:var(--mono);font-size:11.5px;background:rgba(255,255,255,.09);border:1px solid var(--line2);
+  border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--txt)}
+
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:1.1px;text-transform:uppercase;color:var(--faint);font-weight:750}
+tbody tr:hover{background:rgba(255,255,255,.03)}
+td code{white-space:normal}
+
+.card{background:var(--pan);border:1px solid var(--line);border-radius:15px;padding:18px 20px;margin:15px 0}
+.note,.warn,.good{border-left:3px solid;border-radius:12px;padding:13px 17px;margin:15px 0;font-size:14.5px;
+  background:var(--pan)}
+.note{border-left-color:var(--blue)} .warn{border-left-color:var(--gold)} .good{border-left-color:var(--ok)}
+.note b,.warn b,.good b{display:block;margin-bottom:3px;font-size:13px;letter-spacing:.4px}
+.note b{color:var(--blue)} .warn b{color:var(--gold)} .good b{color:var(--ok)}
+.tag{display:inline-block;font-size:10.5px;font-weight:750;letter-spacing:.9px;text-transform:uppercase;
+  padding:2px 8px;border-radius:99px;vertical-align:middle}
+.t-y{background:rgba(49,224,192,.15);color:var(--ok);border:1px solid rgba(49,224,192,.35)}
+.t-n{background:rgba(255,95,109,.14);color:var(--no);border:1px solid rgba(255,95,109,.34)}
+.t-m{background:rgba(255,200,97,.14);color:var(--gold);border:1px solid rgba(255,200,97,.34)}
+.steps{counter-reset:s;list-style:none;margin-left:0}
+.steps li{counter-increment:s;position:relative;padding-left:38px;margin:13px 0}
+.steps li::before{content:counter(s);position:absolute;left:0;top:1px;width:25px;height:25px;border-radius:8px;
+  display:grid;place-items:center;font-size:12.5px;font-weight:750;background:rgba(77,141,255,.16);
+  color:var(--blue);border:1px solid rgba(77,141,255,.35)}
+.files{font-family:var(--mono);font-size:12.7px;line-height:1.85;color:var(--dim)}
+.files b{color:var(--txt);font-weight:600}
+.files i{color:var(--faint);font-style:normal}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:12.5px}
+@media (max-width:980px){ .shell{grid-template-columns:1fr;gap:0;padding:22px 18px 60px} nav{position:static;max-height:none;margin-bottom:28px} }
+</style></head>
+<body>
+<div class="shell">
+<nav>
+  <div class="brand"><div class="mk">&#127908;</div><div><b>Video Replacer</b><small>Guide</small></div></div>
+  <a href="#what">What this is</a>
+  <div class="grp">Everyday</div>
+  <a href="#once">Setting it up once</a>
+  <a href="#run">Running one</a>
+  <a href="#outputs">What comes out</a>
+  <a href="#report">Reading the report</a>
+  <a href="#voice">Choosing the voice</a>
+  <div class="grp">Settings</div>
+  <a href="#config">config.json</a>
+  <a href="#cost">What it costs</a>
+  <div class="grp">Under the hood</div>
+  <a href="#pipeline">The six steps</a>
+  <a href="#fitting">Fitting English to your picture</a>
+  <a href="#sentences">Why sentences, not fragments</a>
+  <a href="#noyoutube">Why not YouTube</a>
+  <a href="#privacy">What leaves this computer</a>
+  <div class="grp">Reference</div>
+  <a href="#own">A voice of your own</a>
+  <a href="#measured">What was measured</a>
+  <a href="#bugs">Bugs found and fixed</a>
+  <a href="#trouble">When something goes wrong</a>
+  <a href="#tests">The test</a>
+  <a href="#files">Every file</a>
+</nav>
+
+<main>
+<h1>Course Video <em>Replacer</em></h1>
+<p class="lede">You record a lecture in Persian or English. It comes back in an American voice,
+still in step with the picture, with subtitles in both languages. Nothing about the video is
+re-encoded and the video itself never leaves this computer.</p>
+
+<h2 id="what">What this is</h2>
+
+<p>One folder on your machine. Drag an <code>.mp4</code> onto <b>Replace.bat</b> and wait.</p>
+
+<p class="files">
+<b>your&nbsp;lecture.mp4</b><br>
+&nbsp;&nbsp;&rarr; <b>your lecture.en.mp4</b> <i>the same video, your voice replaced</i><br>
+&nbsp;&nbsp;&rarr; <b>your lecture.original.srt</b> <i>subtitles in the language you spoke</i><br>
+&nbsp;&nbsp;&rarr; <b>your lecture.english.srt</b> <i>subtitles in English, same timings</i><br>
+&nbsp;&nbsp;&rarr; <b>your lecture.report.txt</b> <i>every line that had to be squeezed</i>
+</p>
+
+<div class="good"><b>The rule this is built around</b>
+Everything that touches the video is ffmpeg, not a model. A 500MB file is never uploaded and
+never re-encoded. Only the sound leaves, as a 32&nbsp;kbps mono mp3 &mdash; about 14MB for an
+hour.</div>
+
+<h2 id="once">Setting it up once</h2>
+
+<ol class="steps">
+  <li>Run <b>Setup.bat</b>. It installs ffmpeg and makes the <code>input</code> and
+      <code>output</code> folders.</li>
+  <li>Make a file called <b>key.txt</b> in this folder with your OpenAI key on one line
+      &mdash; just the key, nothing else. It is in <code>.gitignore</code> and never goes into
+      the repository.</li>
+</ol>
+
+<p>That is all. You never have to run Setup again.</p>
+
+<div class="note"><b>If it says ffmpeg is missing right after installing it</b>
+It will not any more. winget only adds itself to the path of windows opened <em>afterwards</em>,
+so the script also looks in winget's own folder. That one line is the difference between "run
+Setup.bat" and "I just did".</div>
+
+<h2 id="run">Running one</h2>
+
+<p>Drag an <code>.mp4</code> onto <b>Replace.bat</b>. Or drop the file into <code>input\</code>
+and double-click Replace.bat &mdash; it takes the newest one there.</p>
+
+<p>It prints where it has got to. A two-minute lecture takes about a minute; an hour takes
+roughly twenty.</p>
+
+<div class="warn"><b>Start small</b>
+The first time, use a two or three minute recording. It costs a few cents and finishes while you
+watch, and you find out whether the voice and the phrasing are what you want before you commit
+an hour of lecture to it.</div>
+
+<h2 id="outputs">What comes out</h2>
+
+<table>
+  <thead><tr><th>File</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><code>.en.mp4</code></td><td>Your video with the English audio. The picture is the identical stream that went in.</td></tr>
+    <tr><td><code>.original.srt</code></td><td>What you actually said, in the language you said it, with real timings.</td></tr>
+    <tr><td><code>.english.srt</code></td><td>The English, on exactly the same timings, so the two line up.</td></tr>
+    <tr><td><code>.report.txt</code></td><td>Which lines were tight, and which could not fit at all.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="report">Reading the report</h2>
+
+<p>Two different things can go wrong with a line, and the report keeps them apart on purpose:</p>
+
+<table>
+  <thead><tr><th>What it says</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td><b>too long for its 2.0s</b> <span class="tag t-n">fix this</span></td>
+        <td>The English for that moment genuinely needs more seconds than the moment has. Say less there and run it again.</td></tr>
+    <tr><td><b>pushed 1.4s late</b> <span class="tag t-m">a symptom</span></td>
+        <td>This line is fine. An earlier one ran over and shoved it along. Fix the earlier one and this goes away by itself.</td></tr>
+    <tr><td><b>sped up to 109%</b> <span class="tag t-y">fine</span></td>
+        <td>Nothing to do. Nine percent is not audible.</td></tr>
+  </tbody>
+</table>
+
+<p>An earlier version called all three of these the same thing, and one bad sentence turned into
+twenty-three lines of blame. If you only ever read one number, read <b>"Lines whose English is
+too long for their moment"</b>. When that is zero, the run is good.</p>
+
+<h2 id="voice">Choosing the voice</h2>
+
+<p>Run <code>python voices.py</code>. It writes a ten-second sample of every voice into
+<code>samples\</code> &mdash; all of them the same price &mdash; and measures how much dead air
+the voice is adding while it is there.</p>
+
+<p>Play them, then put the one you want in <code>config.json</code>:</p>
+
+<pre><code>"voice": "ash"</code></pre>
+
+<p>The eleven: <code>onyx</code> <code>ash</code> <code>echo</code> <code>ballad</code>
+<code>verse</code> <code>sage</code> <code>alloy</code> <code>fable</code> <code>coral</code>
+<code>nova</code> <code>shimmer</code>.</p>
+
+<h2 id="config">config.json</h2>
+
+<table>
+  <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>voice</code></td><td>onyx</td><td>Which voice speaks. See above.</td></tr>
+    <tr><td><code>max_tempo</code></td><td>1.20</td><td>How far a line may be sped up to fit. <code>1.0</code> means never speed anything up &mdash; lines will simply run over instead.</td></tr>
+    <tr><td><code>min_tempo</code></td><td>0.90</td><td>How much a very short line may be slowed to fill its moment.</td></tr>
+    <tr><td><code>longest_line</code></td><td>10.0</td><td>Fragments are joined into sentences up to this many seconds long.</td></tr>
+    <tr><td><code>join_gap</code></td><td>0.8</td><td>A pause longer than this is left as a break between lines.</td></tr>
+    <tr><td><code>chunk_minutes</code></td><td>12</td><td>How long each piece sent to the transcriber is. Boundaries land on silence.</td></tr>
+    <tr><td><code>writer</code></td><td>gpt-4o</td><td>The model that turns your speech into English.</td></tr>
+    <tr><td><code>transcribe</code></td><td>whisper-1</td><td>Do not change this one &mdash; see below.</td></tr>
+    <tr><td><code>keep_work</code></td><td>false</td><td><code>true</code> keeps the intermediate files, so a re-run skips what is already done.</td></tr>
+  </tbody>
+</table>
+
+<div class="note"><b>Why whisper-1 and not something newer</b>
+<code>gpt-4o-transcribe</code> is the newer model, and it cannot be used here:
+<code>verbose_json</code> and timestamps are <b>whisper-1 only</b> &mdash; the newer ones return
+plain <code>json</code> with no times in it. Without timestamps there is nothing to line the
+English up against.</div>
+
+<h2 id="cost">What it costs</h2>
+
+<table>
+  <thead><tr><th>Per hour of lecture</th><th>Roughly</th></tr></thead>
+  <tbody>
+    <tr><td>writing down what you said</td><td>40&cent;</td></tr>
+    <tr><td>turning it into English</td><td>15&cent;</td></tr>
+    <tr><td>speaking it</td><td>90&cent;</td></tr>
+    <tr><td><b>an hour of lecture</b></td><td><b>under $1.50</b></td></tr>
+  </tbody>
+</table>
+
+<p>Billed to the OpenAI API account, which is separate from a ChatGPT Plus subscription &mdash;
+Plus includes no API credit at all.</p>
+
+<h2 id="pipeline">The six steps</h2>
+
+<table>
+  <thead><tr><th>Step</th><th>Where it happens</th></tr></thead>
+  <tbody>
+    <tr><td>1. take the sound out</td><td>ffmpeg, here. Mono, 16&nbsp;kHz, 32&nbsp;kbps.</td></tr>
+    <tr><td>2. write down what you said</td><td>OpenAI <code>whisper-1</code>, in pieces cut at silences</td></tr>
+    <tr><td>3. turn it into English</td><td>OpenAI <code>gpt-4o</code>, with a word budget per line</td></tr>
+    <tr><td>4. speak it and fit it</td><td>OpenAI <code>gpt-4o-mini-tts</code>, then ffmpeg here</td></tr>
+    <tr><td>5. put it back on the video</td><td>ffmpeg, here. <code>-c:v copy</code>.</td></tr>
+    <tr><td>6. write the subtitles</td><td>here</td></tr>
+  </tbody>
+</table>
+
+<p>Step 5 is why size does not matter. <code>-c:v copy</code> is a stream copy: the picture is
+moved across untouched, so a 500MB file takes about as long as a 5MB one and the quality is
+bit-for-bit what you recorded.</p>
+
+<h2 id="fitting">Fitting English to your picture</h2>
+
+<p>English is never the same length as the Persian it came from. The picture is never altered,
+so the sound has to give &mdash; in this order:</p>
+
+<ol class="steps">
+  <li>Say it at a natural speed.</li>
+  <li>If it will not fit, speed it up &mdash; never past <code>max_tempo</code>.
+      <code>atempo</code> changes speed without changing pitch, so it still sounds like the same
+      person rather than a chipmunk.</li>
+  <li>If it still will not fit, use the silence that follows it.</li>
+  <li>If it <b>still</b> will not fit, let it run over and name it in the report. Better you
+      know and shorten that sentence than the voice becomes unlistenable.</li>
+</ol>
+
+<h2 id="sentences">Why sentences, not fragments</h2>
+
+<p>This is the change that made the difference, and it came out of the first real lecture.</p>
+
+<p>The transcriber hands back short pieces &mdash; a real two-minute lecture came back as
+<b>37</b> of them, some two seconds long. Two seconds holds about five spoken words. So:</p>
+
+<div class="card">
+<h4>Line 5 &mdash; a 2.5 second moment</h4>
+<p>"When I select Spin here, the videos start playing" &mdash; nine words. It needed 3.6 words a
+second. The voice speaks at 2.6, and 3.3 at the very limit. <b>It could not fit however it was
+written.</b></p>
+<h4>Line 7 &mdash; the very next moment, 2 seconds</h4>
+<p>"And there," &mdash; two words, with a second and a half doing nothing.</p>
+</div>
+
+<p>Neither line can lend room to the other while they are separate lines. Joined into one
+sentence, the pair has room to spare. And once a line ran over, every line after it was pushed
+along, so one impossible sentence became a page of failures.</p>
+
+<p>So now: fragments a breath apart are joined into sentences, and each line is handed to the
+writer with the number of words its moment will actually hold:</p>
+
+<pre><code>3. [max 7 words] بعد میرم توی قسمت ریویو کلیپس</code></pre>
+
+<p>Telling the model "shorter is better" was a wish. Telling it "seven words" is a constraint.</p>
+
+<h2 id="noyoutube">Why not YouTube</h2>
+
+<p>The obvious idea &mdash; upload the video, let YouTube transcribe it, take the captions,
+delete the video. It does not work, for four separate reasons:</p>
+
+<ul>
+  <li>An upload costs <b>1600 quota units</b>. The daily allowance is 10,000, so six videos a day.</li>
+  <li><code>captions.download</code> needs <b>OAuth</b>, not the API key you already have.</li>
+  <li>It only works for a video you own, and is widely reported to refuse the
+      <em>automatic</em> captions &mdash; which are the only ones a fresh upload has.</li>
+  <li>It means waiting on a queue you do not control, and then remembering to delete a private
+      lecture from the internet.</li>
+</ul>
+
+<p>Taking the audio out here is faster, predictable, cheaper, gives real timestamps, and leaves
+nothing anywhere that needs cleaning up.</p>
+
+<h2 id="privacy">What leaves this computer</h2>
+
+<table>
+  <thead><tr><th></th><th></th></tr></thead>
+  <tbody>
+    <tr><td>the video</td><td><span class="tag t-n">never</span> not one frame</td></tr>
+    <tr><td>the audio</td><td><span class="tag t-m">yes</span> a 32&nbsp;kbps mono mp3, to OpenAI, to be transcribed</td></tr>
+    <tr><td>the transcript</td><td><span class="tag t-m">yes</span> to OpenAI, to be turned into English</td></tr>
+    <tr><td>your key</td><td><span class="tag t-n">never</span> <code>key.txt</code> is gitignored; only the code is in the repository</td></tr>
+    <tr><td>anything stored anywhere</td><td><span class="tag t-n">no</span> nothing is kept on any service, so there is nothing to delete</td></tr>
+  </tbody>
+</table>
+
+<p>The <code>work\</code> folder is removed when a run finishes, unless you set
+<code>keep_work</code>.</p>
+
+<h2 id="own">A voice of your own</h2>
+
+<p>The obvious question: it has an hour of your voice &mdash; can it just sound like you?</p>
+
+<p><b>Not through OpenAI, on this account.</b> Custom voices do exist in the API now, and the
+documentation says they are limited to eligible customers without saying who. Asking is the only
+honest way to find out, and <code>probe-voice.py</code> asks &mdash; it makes four read-only
+requests and creates nothing:</p>
+
+<pre><code>audio/voices           no such endpoint on this account
+audio/voice_consents   no such endpoint on this account
+voices                 no such endpoint on this account
+voice_consents         no such endpoint on this account</code></pre>
+
+<p>Four 404s. Not "denied" &mdash; the endpoints are not there at all for this account. So the
+eleven preset voices are what there is, through OpenAI.</p>
+
+<p>There is another road, and it does not cost money: cloning a voice locally, on this machine's
+own graphics card. It is free in money and expensive in everything else &mdash; a multi-gigabyte
+install, a model that has to be fed a clean sample of you, and quality that has to be heard
+before it is trusted. That is a decision, not a default, so it is not built in.</p>
+
+<h2 id="measured">What was measured</h2>
+
+<div class="card">
+<h4>The first real lecture, before and after</h4>
+<table>
+  <thead><tr><th></th><th>Before</th><th>After</th></tr></thead>
+  <tbody>
+    <tr><td>lines whose English would not fit</td><td>23</td><td><b>0</b></td></tr>
+    <tr><td>lines that had to be sped up</td><td>4</td><td>1, to 109%</td></tr>
+    <tr><td>what it was working with</td><td>36 fragments</td><td>11 sentences</td></tr>
+  </tbody>
+</table>
+<p>Same recording, same voice, same models. The only changes were joining the fragments and
+telling the writer how many words each moment holds.</p>
+</div>
+
+<div class="card">
+<h4>How much of a spoken line is silence</h4>
+<p>"And that's it." &mdash; three words &mdash; came back as a <b>1.42 second</b> file, of which
+<b>0.70 seconds was silence</b>. Half. Over a lecture that is half a minute of dead air pushing
+every later line out of step. It is trimmed off now.</p>
+</div>
+
+<h2 id="bugs">Bugs found and fixed</h2>
+
+<div class="card">
+<h4>The English fell behind, and it was not because you spoke fast</h4>
+<p>That was the first guess and it was wrong. Three-word lines were overrunning two-second
+slots, which cannot be a length problem. It was fragments too short to hold a sentence, and a
+report that blamed every line downstream of the real culprit. See <a href="#sentences">Why
+sentences</a>.</p>
+</div>
+
+<div class="card">
+<h4>The console died on the first Persian word</h4>
+<p><code>'charmap' codec can't encode character 'ی'</code> &mdash; the Windows console is
+cp1252, and printing the transcript killed the whole run. An hour of work is not worth losing to
+a print statement: the output is UTF-8 now, and anything the console cannot draw is replaced
+rather than fatal.</p>
+</div>
+
+<div class="card">
+<h4>ffmpeg was installed and still "not found"</h4>
+<p>winget adds itself to the path of windows opened afterwards. The one you ran Setup in was
+opened before. It now also looks in winget's own package folder, so the install works
+immediately.</p>
+</div>
+
+<h2 id="trouble">When something goes wrong</h2>
+
+<table>
+  <thead><tr><th>It says</th><th>Do this</th></tr></thead>
+  <tbody>
+    <tr><td>No OpenAI key</td><td>Make <code>key.txt</code> in this folder, the key on one line, nothing else.</td></tr>
+    <tr><td>ffmpeg is not installed</td><td>Run Setup.bat once.</td></tr>
+    <tr><td>HTTP 401 from audio/transcriptions</td><td>The key is wrong or has been revoked. Make a new one.</td></tr>
+    <tr><td>HTTP 429</td><td>Out of credit, or too many requests. Check the OpenAI billing page.</td></tr>
+    <tr><td>it stopped half way</td><td>Set <code>keep_work: true</code> and run it again &mdash; it will not pay twice for the transcription or the English.</td></tr>
+    <tr><td>lots of "too long" lines</td><td>Lower <code>longest_line</code> is <em>not</em> the answer &mdash; raise it. Longer sentences have more room to move.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="tests">The test</h2>
+
+<p><code>python test-pipeline.py</code>. It builds a made-up 40-second lecture, runs the whole
+thing on it, and checks nineteen things. The three steps that cost money are replaced by stubs,
+so it spends nothing and needs no key.</p>
+
+<p>What it actually proves, which is hard to see by watching the video once:</p>
+
+<ul>
+  <li>every line lands on the moment of video it belongs to &mdash; by <b>measuring the energy in
+      the finished audio</b> half-second by half-second, not by trusting the code;</li>
+  <li>the gaps between lines are still silent;</li>
+  <li>the picture came out as the same stream that went in;</li>
+  <li>both subtitle files line up with each other and with the video;</li>
+  <li>a line too long for its moment is capped and <b>named</b>, and the lines it merely pushed
+      are counted separately;</li>
+  <li>fragments a breath apart become one sentence, and a real pause stays a break;</li>
+  <li>the silence either side of a spoken line is actually cut off.</li>
+</ul>
+
+<h2 id="files">Every file</h2>
+
+<p class="files">
+<b>Course Video Replacer\</b><br>
+&nbsp;&nbsp;<b>Replace.bat</b> <i>drag an mp4 onto this</i><br>
+&nbsp;&nbsp;<b>Setup.bat</b> <i>run once: gets ffmpeg</i><br>
+&nbsp;&nbsp;<b>replacer.py</b> <i>the whole pipeline</i><br>
+&nbsp;&nbsp;<b>config.json</b> <i>voice, tempo limits, models</i><br>
+&nbsp;&nbsp;<b>key.txt</b> <i>your OpenAI key. Gitignored. Never committed.</i><br>
+&nbsp;&nbsp;<b>voices.py</b> <i>ten seconds of every voice, into samples\</i><br>
+&nbsp;&nbsp;<b>probe-voice.py</b> <i>asks whether a voice of your own is possible</i><br>
+&nbsp;&nbsp;<b>test-pipeline.py</b> <i>nineteen checks, nothing spent</i><br>
+&nbsp;&nbsp;<b>guide.html</b> <i>this file</i><br>
+&nbsp;&nbsp;<b>input\</b> <i>drop lectures here</i><br>
+&nbsp;&nbsp;<b>output\</b> <i>the finished video and subtitles</i><br>
+&nbsp;&nbsp;<b>samples\</b> <i>the voice samples</i><br>
+&nbsp;&nbsp;<b>work\</b> <i>while a run is going; removed at the end</i>
+</p>
+
+<p>The same code, without <code>key.txt</code>, is in the repository at
+<code>miladkasirian/clips</code> under <code>video-replacer/</code>.</p>
+
+<footer>Course Video Replacer &mdash; Milad Kasirian, FIN 220 &middot; every number on this page
+was measured, not estimated.</footer>
+</main>
+</div>
+</body>
+</html>
