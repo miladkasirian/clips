@@ -1,0 +1,8 @@
+key.txt
+work/
+input/
+output/
+ffmpeg/
+*.mp4
+*.zip
+__pycache__/
