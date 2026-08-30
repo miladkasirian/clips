@@ -93,6 +93,8 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
   <div class="grp">Everyday</div>
   <a href="#once">Setting it up once</a>
   <a href="#run">Running one</a>
+  <a href="#review">Checking it before it speaks</a>
+  <a href="#glossary">Words it gets wrong</a>
   <a href="#outputs">What comes out</a>
   <a href="#report">Reading the report</a>
   <a href="#voice">Choosing the voice</a>
@@ -166,6 +168,49 @@ roughly twenty.</p>
 The first time, use a two or three minute recording. It costs a few cents and finishes while you
 watch, and you find out whether the voice and the phrasing are what you want before you commit
 an hour of lecture to it.</div>
+
+<h2 id="review">Checking it before it speaks</h2>
+
+<p>A run stops in the middle, on purpose. It writes
+<b>output\&lt;name&gt;.review.txt</b> and opens it:</p>
+
+<pre><code>[002]  00:08 - 00:17   (max 22 words)
+  FA: گذینه لولیست داریم بعد گذینه کلیپ داریم اسپین داریم
+  EN: We have the Lolist option, then the clip option, Spin, etc.</code></pre>
+
+<p>Every line you said, and under it the English that will be spoken over that
+exact moment of video. Change any <code>EN:</code> line, save the file, and run
+<b>Approve.bat</b>.</p>
+
+<div class="good"><b>Why here and not afterwards</b>
+The voice is the expensive step and the one that cannot be un-said. A word the
+translator got wrong is free to fix at this point and costs a whole run to fix
+after. Nothing has been spoken when the sheet appears, and nothing has been spent
+on the voice.</div>
+
+<p>The <code>(max 22 words)</code> is what will fit in that moment. Going over it
+is allowed &mdash; that line is then sped up, and if it still will not fit it runs
+over and the report says so.</p>
+
+<p>To skip the stop entirely, set <code>"review": false</code> in config.json, or
+run <code>python replacer.py "your.mp4" --go</code>.</p>
+
+<h2 id="glossary">Words it gets wrong</h2>
+
+<p>Some mistakes are not one-offs. A name you invented has no translation: say
+<b>MLAD</b> out loud in Persian and the transcriber writes <span dir="rtl">ملاد</span>,
+and the writer turns that into "Milad" &mdash; a different thing, in every line,
+in every video.</p>
+
+<p>Put it in <b>glossary.txt</b>, one per line:</p>
+
+<pre><code>ملاد = MLAD
+اسپین = Spin
+کانتنت = Content</code></pre>
+
+<p>Those are handed to the writer as terms it must use exactly as written. The
+review sheet is for the mistake that happened once; the glossary is for the one
+that would keep happening.</p>
 
 <h2 id="outputs">What comes out</h2>
 
@@ -361,10 +406,35 @@ voice_consents         no such endpoint on this account</code></pre>
 <p>Four 404s. Not "denied" &mdash; the endpoints are not there at all for this account. So the
 eleven preset voices are what there is, through OpenAI.</p>
 
-<p>There is another road, and it does not cost money: cloning a voice locally, on this machine's
-own graphics card. It is free in money and expensive in everything else &mdash; a multi-gigabyte
-install, a model that has to be fed a clean sample of you, and quality that has to be heard
-before it is trusted. That is a decision, not a default, so it is not built in.</p>
+<h3>So it was done locally instead, and it works</h3>
+
+<p>XTTS-v2 runs on this machine, clones from a sample of you, and costs nothing to run. It is
+installed in <code>.venv\</code> beside the app &mdash; <b>its own environment on purpose</b>,
+because installing it into the main Python broke a package that was already there. Nothing
+outside that folder is touched.</p>
+
+<p><code>python clone-sample.py</code> makes a sample. Compare in <code>samples\</code>:</p>
+
+<table>
+  <thead><tr><th>File</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><code>_your-real-voice.mp3</code></td><td>you, from your own recording</td></tr>
+    <tr><td><code>_your-cloned-voice.mp3</code></td><td>the same voice, speaking new English</td></tr>
+    <tr><td><code>_cloned-from-persian.mp3</code></td><td>the same, cloned from a Persian sample instead &mdash; audibly worse</td></tr>
+    <tr><td><code>onyx.mp3</code></td><td>what the app uses now</td></tr>
+  </tbody>
+</table>
+
+<div class="note"><b>Clone from a recording of yourself speaking English</b>
+Not Persian. The model copies the timbre from whatever it is given, and giving it the language it
+has to speak gives it far more to work with. Put the recording at
+<code>voice\reference.wav</code>.</div>
+
+<p><b>The cost is time, not money.</b> On the processor it runs at 2.3&times; real time, so an
+hour of lecture takes over two hours. The graphics card would be several times faster, but that
+needs the CUDA build of torch &mdash; a 2.5GB download &mdash; and it is not worth doing until
+the voice is one you actually want to hear for an hour. XTTS-v2 is also licensed for
+non-commercial use.</p>
 
 <h2 id="measured">What was measured</h2>
 

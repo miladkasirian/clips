@@ -3,7 +3,11 @@ work/
 input/
 output/
 samples/
+voice/
 ffmpeg/
+.venv/
 *.mp4
+*.m4a
+*.wav
 *.zip
 __pycache__/

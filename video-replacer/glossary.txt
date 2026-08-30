@@ -1,0 +1,15 @@
+# Words the translator would otherwise get wrong.
+#
+# One per line:   what it sounds like in Persian  =  what it must be in English
+#
+# A name you invented has no translation. Said out loud, MLAD comes back from
+# the transcriber as ملاد, and the writer turns that into "Milad" - a different
+# thing, in every line. One line here fixes it once, for every video from now on.
+#
+# Lines starting with # are ignored. Delete these examples and put your own.
+
+ملاد = MLAD
+اسپین = Spin
+کلیپ = clip
+لینک = link
+کانتنت = Content

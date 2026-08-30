@@ -11,7 +11,7 @@ that every line ends up at the moment of video it belongs to, that a line too
 long for its slot is sped up rather than allowed to trample the next one, and
 that the picture came through untouched.
 """
-import json, os, subprocess, sys, shutil, wave
+import io, json, os, subprocess, sys, shutil, wave
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -22,7 +22,7 @@ fails = []
 
 
 def check(n, what, good, extra=""):
-    print("%d. %-58s %s %s" % (n, what, ok(good), extra))
+    print("%-3s %-58s %s %s" % (str(n) + ".", what, ok(good), extra))
     if not good:
         fails.append(n)
 
@@ -94,7 +94,21 @@ def main():
     R.key = lambda: "not-used"
     R.config = lambda: dict(R.DEFAULTS, keep_work=True)
 
+    # --- it stops for you before it speaks anything ---
     sys.argv = ["replacer.py", video]
+    R.main()
+    sheet = os.path.join(work, "out", "lecture.review.txt")
+    check(0, "it stops and asks before spending anything on the voice",
+          os.path.exists(sheet) and not os.path.exists(os.path.join(work, "out", "lecture.en.mp4")))
+    if os.path.exists(sheet):
+        text = open(sheet, encoding="utf-8").read()
+        check("0b", "the sheet shows what you said and what will be spoken",
+              SAID[0][2] in text and SAID[0][3] in text and "max" in text)
+        # change one line by hand, exactly as you would in Notepad
+        io.open(sheet, "w", encoding="utf-8-sig", newline="\r\n").write(
+            text.replace(SAID[1][3], "I FIXED THIS LINE MYSELF."))
+
+    sys.argv = ["replacer.py", video, "--go"]
     R.main()
 
     out = os.path.join(work, "out", "lecture.en.mp4")
@@ -177,6 +191,13 @@ def main():
     before, after = R.duration(pad), R.duration(cut)
     check(19, "the silence either side of a spoken line is cut off",
           before > 2.8 and after < 1.4, "%.2fs -> %.2fs" % (before, after))
+
+    # --- your correction has to survive into everything downstream ---
+    check(20, "the line you fixed is the line that gets spoken",
+          "I FIXED THIS LINE MYSELF." in en_txt and SAID[1][3] not in en_txt)
+
+    terms = R.glossary()
+    check(21, "the glossary is read", isinstance(terms, list))
 
     print("\n--- the report it wrote ---")
     print(rep.strip()[:700])

@@ -43,6 +43,7 @@ DEFAULTS = {
     "min_tempo":   0.90,             # slowing a short line down, gently
     "longest_line": 10.0,            # fragments are joined into sentences up to this long
     "join_gap":     0.8,             # ...as long as the pause between them is under this
+    "review":       True,            # stop and show the English before speaking it
     "chunk_minutes": 12,             # transcription is sent in pieces this long
     "batch":       40,               # segments per translation request
     "sample_rate": 24000,            # what the speech endpoint returns
@@ -291,6 +292,32 @@ def merge(segs, longest=10.0, gap=0.8):
     return out
 
 
+def glossary():
+    """Words the writer would otherwise get wrong.
+
+    A name you invented has no translation. Said in Persian, "MLAD" comes out of
+    the transcriber as ملاد and the writer turns it into "Milad" - a different
+    thing entirely, in every line, for ever. One line in glossary.txt fixes it
+    once instead of by hand every time:
+
+        ملاد = MLAD
+        اسپین = Spin
+    """
+    path = os.path.join(HERE, "glossary.txt")
+    if not os.path.exists(path):
+        return []
+    pairs = []
+    for line in open(path, encoding="utf-8-sig"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            a, b = line.split("=", 1)
+            if a.strip() and b.strip():
+                pairs.append((a.strip(), b.strip()))
+    return pairs
+
+
 def budget(segs, i, cps=WORDS_PER_SECOND):
     """How many words this line has room for, from the gap to the next one."""
     nxt = segs[i + 1]["start"] if i + 1 < len(segs) else segs[i]["end"] + 3.0
@@ -320,6 +347,9 @@ TRANSLATE = (
 
 def translate(segs, cfg, k):
     out = [None] * len(segs)
+    terms = glossary()
+    if terms:
+        log("     holding %d term%s fixed from glossary.txt" % (len(terms), "" if len(terms) == 1 else "s"))
     size = max(5, int(cfg["batch"]))
     for a in range(0, len(segs), size):
         part = segs[a:a + size]
@@ -328,10 +358,15 @@ def translate(segs, cfg, k):
         want = [str(a + i + 1) for i in range(len(part))]
         got = None
         for attempt in (1, 2):
+            rules = TRANSLATE
+            if terms:
+                rules += ("\n\nThese are fixed. Wherever they are said, use exactly the right-hand "
+                          "side and nothing else - they are names and terms with no translation:\n"
+                          + "\n".join("  %s  ->  %s" % (a, b) for a, b in terms))
             body = json.dumps({
                 "model": cfg["writer"], "temperature": 0.4,
                 "response_format": {"type": "json_object"},
-                "messages": [{"role": "system", "content": TRANSLATE},
+                "messages": [{"role": "system", "content": rules},
                              {"role": "user", "content": lines}]}).encode()
             raw = post("https://api.openai.com/v1/chat/completions", body,
                        {"Authorization": "Bearer " + k, "Content-Type": "application/json"})
@@ -362,6 +397,65 @@ def trim_silence(src, dest, floor="-45dB"):
            % floor)
     run([tool("ffmpeg"), "-y", "-v", "error", "-i", src, "-af",
          one + ",areverse," + one + ",areverse", dest])
+
+
+REVIEW_HEAD = """\
+# ---------------------------------------------------------------------------
+#  READ AND FIX THIS BEFORE THE VOICE IS MADE
+#
+#  Under each line is what you said, and under that the English that will be
+#  spoken over that exact moment of the video. Change the EN: lines - only the
+#  EN: lines - and save the file.
+#
+#  Then run  Approve.bat  (or drag the same video onto Replace.bat again).
+#
+#  Nothing has been spoken yet, so fixing a word here costs nothing. A name the
+#  translator got wrong is worth putting in glossary.txt as well, so it is right
+#  the next time too.
+#
+#  (max N words) is what will fit in that moment. Going over it is allowed - the
+#  line is then sped up, and if it still will not fit it runs over and the
+#  report says so.
+# ---------------------------------------------------------------------------
+
+"""
+
+
+def write_review(segs, path):
+    # utf-8-sig: the BOM is what makes every Windows editor open the Persian as
+    # Persian instead of as mojibake. read_review reads utf-8-sig, so it round-trips.
+    with open(path, "w", encoding="utf-8-sig", newline="\r\n") as f:
+        f.write(REVIEW_HEAD)
+        for i, s in enumerate(segs):
+            f.write("[%03d]  %s - %s   (max %d words)\n"
+                    % (i + 1, clock(s["start"])[3:-4], clock(s["end"])[3:-4], budget(segs, i)))
+            f.write("  FA: %s\n" % s["said"].strip())
+            f.write("  EN: %s\n\n" % (s.get("en") or "").strip())
+
+
+def read_review(segs, path):
+    """Take the English back off the sheet. A line that is not there, or has been
+    emptied, keeps what it had - deleting a line by accident should not silently
+    delete that piece of the lecture."""
+    if not os.path.exists(path):
+        return segs, 0
+    got, n, changed = {}, None, 0
+    for line in open(path, encoding="utf-8-sig"):
+        line = line.rstrip("\n")
+        m = re.match(r"\s*\[(\d+)\]", line)
+        if m:
+            n = int(m.group(1)) - 1
+            continue
+        m = re.match(r"\s*EN:\s?(.*)$", line)
+        if m and n is not None and 0 <= n < len(segs):
+            got[n] = re.sub(r"\s+", " ", m.group(1)).strip()
+            n = None
+    for i, s in enumerate(segs):
+        new = got.get(i)
+        if new and new != (s.get("en") or "").strip():
+            s["en"] = new
+            changed += 1
+    return segs, changed
 
 
 def speak(text, cfg, k, dest):
@@ -533,6 +627,34 @@ def main():
         json.dump(segs, open(en_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     log("       %s\n" % (segs[0].get("en", "")[:70]))
 
+    # ---- your turn, before anything is spoken ----------------------------
+    # The voice is the expensive step and the one that cannot be un-said. A
+    # name the translator got wrong is free to fix here and costs a whole run
+    # to fix afterwards, so this is where it stops and waits.
+    review = os.path.join(OUT, name + ".review.txt")
+    if cfg.get("review", True):
+        # A sheet on disk is your answer, whether you came back through
+        # Approve.bat or just ran it again. Only when there is no sheet at all
+        # does it write one and wait - and --go is how you say "do not bother".
+        if os.path.exists(review):
+            segs, changed = read_review(segs, review)
+            json.dump(segs, open(en_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+            log("  approved%s\n" % (" with %d line%s of your own" % (changed, "" if changed == 1 else "s")
+                                     if changed else " unchanged"))
+        elif "--go" not in sys.argv:
+            write_review(segs, review)
+            log("  READ IT FIRST")
+            log("       %s" % review)
+            log("")
+            log("       Every line you said, with the English that will be spoken over it.")
+            log("       Fix any EN: line, save, then run Approve.bat.")
+            log("       Nothing has been spoken yet, so nothing has been spent on the voice.\n")
+            try:
+                os.startfile(review)          # opens it in Notepad, on Windows
+            except Exception:
+                pass
+            return
+
     log("  4/6  speaking it, and fitting it to your picture")
     track, report = build_track(segs, cfg, folder, total, k)
     log("")
@@ -565,6 +687,10 @@ def main():
 
     if not cfg.get("keep_work"):
         shutil.rmtree(folder, ignore_errors=True)
+    try:
+        os.remove(review)                 # it has been used; the srt files replace it
+    except Exception:
+        pass
 
     tight = len([r for r in report if r[3]])
     log("\n  Done in %.0f minutes.\n" % ((time.time() - began) / 60))

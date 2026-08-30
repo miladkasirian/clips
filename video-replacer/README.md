@@ -17,10 +17,29 @@ line. That file is in `.gitignore` and never leaves this computer.
 
 ## Every time
 
-Drag an `.mp4` onto **Replace.bat**. Or drop the file in `input\` and
-double-click Replace.bat — it takes the newest one.
+1. Drag an `.mp4` onto **Replace.bat**.
+2. It stops and opens **`output\<name>.review.txt`** — every line you said, with
+   the English that will be spoken over that exact moment. Fix any `EN:` line and
+   save. **Nothing has been spoken yet, so fixing a word here costs nothing.**
+3. Run **Approve.bat**. It speaks it, fits it, and builds the video.
 
-Everything lands in `output\`.
+Everything lands in `output\`. Set `"review": false` in config.json to skip the
+middle step, or pass `--go` on the command line.
+
+### Words it will get wrong
+
+A name you invented has no translation. Say *MLAD* out loud in Persian and the
+transcriber writes ملاد, and the writer turns that into "Milad" — in every line,
+for ever. Put it in **glossary.txt** once:
+
+```
+ملاد = MLAD
+اسپین = Spin
+```
+
+Those are handed to the writer as fixed terms it must use exactly. The review
+sheet is for the one-off mistakes; the glossary is for the ones that would keep
+happening.
 
 ## What happens, and where
 
