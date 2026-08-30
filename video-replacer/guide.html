@@ -91,6 +91,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
   <div class="brand"><div class="mk">&#127908;</div><div><b>Video Replacer</b><small>Guide</small></div></div>
   <a href="#what">What this is</a>
   <div class="grp">Everyday</div>
+  <a href="#app">The app</a>
   <a href="#once">Setting it up once</a>
   <a href="#run">Running one</a>
   <a href="#review">Checking it before it speaks</a>
@@ -108,7 +109,8 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
   <a href="#noyoutube">Why not YouTube</a>
   <a href="#privacy">What leaves this computer</a>
   <div class="grp">Reference</div>
-  <a href="#own">A voice of your own</a>
+  <a href="#yourvoice">Using a voice of your own</a>
+  <a href="#own">Why it had to be local</a>
   <a href="#measured">What was measured</a>
   <a href="#bugs">Bugs found and fixed</a>
   <a href="#trouble">When something goes wrong</a>
@@ -138,6 +140,46 @@ re-encoded and the video itself never leaves this computer.</p>
 Everything that touches the video is ffmpeg, not a model. A 500MB file is never uploaded and
 never re-encoded. Only the sound leaves, as a 32&nbsp;kbps mono mp3 &mdash; about 14MB for an
 hour.</div>
+
+<h2 id="app">The app</h2>
+
+<p>Double-click <b>Course Video Replacer.bat</b>. Three tabs, and everything is in them.</p>
+
+<table>
+  <thead><tr><th>Tab</th><th>What is in it</th></tr></thead>
+  <tbody>
+    <tr><td><b>Convert</b></td><td>The video, where the results go, whether to stop and show you
+        the English first, and how much a line may be sped up. Then <b>Start</b>.</td></tr>
+    <tr><td><b>Voice</b></td><td>Every voice you can use &mdash; the eleven ready-made ones and any
+        you have added. <b>Hear it</b> plays a sample. <b>Add a voice…</b> makes a new one from a
+        recording.</td></tr>
+    <tr><td><b>Words to keep right</b></td><td>The glossary, edited in place. Save and it applies to
+        the next run.</td></tr>
+  </tbody>
+</table>
+
+<p><b>Remember these settings</b>, next to Start, writes what is on screen into
+<code>config.json</code>, so the next time you open the app it is already the way you left it.</p>
+
+<h3>The panel that opens before it speaks</h3>
+
+<p>If <i>Show me every line first</i> is ticked, a window opens partway through with one card per
+line: the moment it covers, how many words fit there, what you said, and &mdash; in a box you can
+type into &mdash; the English that will be spoken over it.</p>
+
+<p>Fix whatever is wrong and press <b>Approve and make the video</b>. Press <b>Cancel</b> and
+nothing further happens.</p>
+
+<div class="good"><b>This is the cheap moment</b>
+Nothing has been spoken when that panel opens, and nothing has been spent on the voice. A name
+the translator got wrong costs nothing to fix here and a whole run to fix afterwards.</div>
+
+<p>Emptying a box does not delete that line &mdash; it keeps what it had. Deleting a piece of your
+lecture by accidentally clearing a field is not a thing that should be possible.</p>
+
+<div class="note"><b>The console way still works</b>
+<code>Replace.bat</code> and <code>Approve.bat</code> do the same job with a text file instead of a
+window. Both call the same pipeline, so a fix to one is a fix to both.</div>
 
 <h2 id="once">Setting it up once</h2>
 
@@ -389,7 +431,30 @@ nothing anywhere that needs cleaning up.</p>
 <p>The <code>work\</code> folder is removed when a run finishes, unless you set
 <code>keep_work</code>.</p>
 
-<h2 id="own">A voice of your own</h2>
+<h2 id="yourvoice">Using a voice of your own</h2>
+
+<p>In the <b>Voice</b> tab, press <b>Add a voice…</b>, choose any recording of someone speaking
+&mdash; an mp4, an m4a, anything ffmpeg reads &mdash; and give it a name. It appears in the list
+straight away and can be picked like any other voice.</p>
+
+<p>What happens to the recording: the sound is taken out, made mono, the silence trimmed, and
+capped at forty seconds, into <code>voice\&lt;name&gt;.wav</code>. Past forty seconds the model
+gains nothing and only gets slower.</p>
+
+<div class="warn"><b>Give it a recording in English</b>
+Not Persian. The model copies the timbre of whatever it is given, and giving it the language it
+has to speak gives it far more to work with. Both were made and compared &mdash;
+<code>_your-cloned-voice.mp3</code> against <code>_cloned-from-persian.mp3</code> in
+<code>samples\</code> &mdash; and the difference is audible.</div>
+
+<p>The first time a cloned voice is used the model downloads once, about 1.8GB. It needs
+<b>Setup-voice.bat</b> run once first; the ready-made voices need none of this.</p>
+
+<p><b>The cost is time, not money.</b> On the processor it runs at about 2.3&times; real time, so
+an hour of lecture takes over two hours. The graphics card would be several times faster but
+needs the CUDA build of torch, a 2.5GB download. XTTS-v2 is licensed for non-commercial use.</p>
+
+<h2 id="own">Why it had to be local</h2>
 
 <p>The obvious question: it has an hour of your voice &mdash; can it just sound like you?</p>
 

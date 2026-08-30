@@ -458,7 +458,92 @@ def read_review(segs, path):
     return segs, changed
 
 
+VOICEDIR = os.path.join(HERE, "voice")
+MINE = "mine:"       # a voice value of "mine:milad" means voice\milad.wav
+_local = [None]
+
+
+def cloned_voices():
+    """Every recording in the voice folder is a voice you can pick."""
+    if not os.path.isdir(VOICEDIR):
+        return []
+    return sorted(os.path.splitext(f)[0] for f in os.listdir(VOICEDIR)
+                  if f.lower().endswith(".wav") and not f.startswith("_"))
+
+
+def is_clone(cfg):
+    return str(cfg.get("voice", "")).lower().startswith(MINE)
+
+
+def reference(cfg):
+    """The recording the clone copies.
+
+    Use a recording of the speaker in ENGLISH if there is one. The model copies
+    timbre from whatever it is given, and giving it the language it has to speak
+    gives it far more to work with - the difference between the two is audible.
+    """
+    want = str(cfg.get("voice", ""))[len(MINE):].strip()
+    path = os.path.join(VOICEDIR, want + ".wav")
+    if os.path.exists(path):
+        return path
+    left = cloned_voices()
+    return os.path.join(VOICEDIR, left[0] + ".wav") if left else None
+
+
+def add_voice(source, name):
+    """Turn any recording - a video, an m4a, anything ffmpeg reads - into a voice
+    that can be picked. Mono, trimmed of its silence, and capped: past about
+    forty seconds the model gains nothing and only gets slower."""
+    os.makedirs(VOICEDIR, exist_ok=True)
+    safe = re.sub(r"[^\w -]+", "", name).strip() or "voice"
+    dest = os.path.join(VOICEDIR, safe + ".wav")
+    cut = ("silenceremove=start_periods=1:start_silence=0:start_threshold=-45dB:detection=peak")
+    run([tool("ffmpeg"), "-y", "-v", "error", "-i", source, "-vn", "-ac", "1", "-ar", "22050",
+         "-af", cut, "-t", "40", "-c:a", "pcm_s16le", dest])
+    return safe, dest
+
+
+def local_voice(cfg):
+    """Loaded once - it takes about fifteen seconds and would otherwise be paid
+    for on every single line."""
+    if _local[0] is None:
+        os.environ.setdefault("COQUI_TOS_AGREED", "1")
+        try:
+            import torch
+            from TTS.api import TTS
+        except ImportError:
+            die("Your own voice needs the local model. Run Setup-voice.bat once.")
+        where = "cuda" if torch.cuda.is_available() else "cpu"
+        log("       loading your voice (%s)%s"
+            % (where, "" if where == "cuda" else " - the processor, so this is slow"))
+        _local[0] = TTS(cfg.get("clone_model", "tts_models/multilingual/multi-dataset/xtts_v2")).to(where)
+    return _local[0]
+
+
+def speak_local(text, cfg, dest):
+    ref = reference(cfg)
+    if not ref:
+        die("There is no recording in voice\\ to copy. Add one in the app first.")
+    wav = dest + ".wav"
+    local_voice(cfg).tts_to_file(text=text, speaker_wav=ref, language="en", file_path=wav)
+    run([tool("ffmpeg"), "-y", "-v", "error", "-i", wav, "-c:a", "libmp3lame", "-b:a", "128k", dest])
+    try: os.remove(wav)
+    except Exception: pass
+
+
 def speak(text, cfg, k, dest):
+    if is_clone(cfg):
+        padded = dest + ".padded.mp3"
+        speak_local(text, cfg, padded)
+        try:
+            trim_silence(padded, dest); os.remove(padded)
+        except Exception:
+            os.replace(padded, dest)
+        return
+    return speak_openai(text, cfg, k, dest)
+
+
+def speak_openai(text, cfg, k, dest):
     body = json.dumps({
         "model": cfg["speaker"], "voice": cfg["voice"], "input": text,
         "response_format": "mp3",
@@ -577,14 +662,20 @@ def mux(video, track, dest):
          "-shortest", "-movflags", "+faststart", dest])
 
 
-def main():
-    if len(sys.argv) < 2:
-        die("Drag an .mp4 onto Replace.bat, or run:  python replacer.py \"your video.mp4\"")
-    video = os.path.abspath(sys.argv[1])
-    if not os.path.exists(video):
-        die("There is no file at %s" % video)
+def convert(video, cfg=None, say=None, ask=None, out_dir=None):
+    """The whole pipeline, once.
 
-    cfg, k = config(), key()
+    `say` is where the progress lines go - the console, or a window.
+    `ask` is your look at the English before anything is spoken. It is handed the
+    lines and gives back the ones to speak, or None to stop. The console version
+    writes a file and waits for Approve; the window version opens a panel. The
+    pipeline does not know or care which.
+    """
+    global log, OUT
+    if say: log = say
+    if out_dir: OUT = out_dir
+    cfg = cfg or config()
+    k = key()
     name = os.path.splitext(os.path.basename(video))[0]
     folder = os.path.join(WORK, re.sub(r"[^\w.-]+", "_", name))
     os.makedirs(folder, exist_ok=True)
@@ -631,8 +722,15 @@ def main():
     # The voice is the expensive step and the one that cannot be un-said. A
     # name the translator got wrong is free to fix here and costs a whole run
     # to fix afterwards, so this is where it stops and waits.
+    if ask is not None:
+        segs = ask(segs)
+        if segs is None:
+            log("  stopped before anything was spoken.")
+            return None
+        json.dump(segs, open(en_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
     review = os.path.join(OUT, name + ".review.txt")
-    if cfg.get("review", True):
+    if ask is None and cfg.get("review", True):
         # A sheet on disk is your answer, whether you came back through
         # Approve.bat or just ran it again. Only when there is no sheet at all
         # does it write one and wait - and --go is how you say "do not bother".
@@ -653,7 +751,7 @@ def main():
                 os.startfile(review)          # opens it in Notepad, on Windows
             except Exception:
                 pass
-            return
+            return None
 
     log("  4/6  speaking it, and fitting it to your picture")
     track, report = build_track(segs, cfg, folder, total, k)
@@ -699,6 +797,17 @@ def main():
     log("   %s" % en)
     log("   %s%s" % (rep, "   <- %d lines did not fit, have a look" % tight if tight else ""))
     log("")
+
+
+def main():
+    """The console way in: a video on the command line, and the review sheet as a
+    file you edit in Notepad. The window app calls run() directly instead."""
+    if len(sys.argv) < 2:
+        die("Drag an .mp4 onto Replace.bat, or run:  python replacer.py \"your video.mp4\"")
+    video = os.path.abspath(sys.argv[1])
+    if not os.path.exists(video):
+        die("There is no file at %s" % video)
+    convert(video)
 
 
 if __name__ == "__main__":

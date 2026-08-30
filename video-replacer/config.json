@@ -1,16 +1,13 @@
 {
-  "transcribe":    "whisper-1",
-  "writer":        "gpt-4o",
-  "speaker":       "gpt-4o-mini-tts",
-  "voice":         "onyx",
-
-  "max_tempo":     1.20,
-  "min_tempo":     0.90,
-
-  "review":        true,
-
+  "transcribe": "whisper-1",
+  "writer": "gpt-4o",
+  "speaker": "gpt-4o-mini-tts",
+  "voice": "mine:Milad",
+  "max_tempo": 1.2,
+  "min_tempo": 0.9,
+  "review": true,
   "chunk_minutes": 12,
-  "batch":         40,
-  "sample_rate":   24000,
-  "keep_work":     false
+  "batch": 40,
+  "sample_rate": 24000,
+  "keep_work": false
 }
