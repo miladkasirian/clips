@@ -53,7 +53,22 @@ class App(tk.Tk):
         self.answer = queue.Queue()      # the review panel's reply to the pipeline
         self._skin()
         self._build()
+        self.protocol("WM_DELETE_WINDOW", self.shut)
         self.after(80, self._drain)
+
+    def shut(self):
+        """Closing means closing. A half-finished transcript of a lecture is not
+        something to leave lying about, and the voice model is a live process
+        that would otherwise stay running with nothing to do."""
+        try:
+            R.stop_local()
+        except Exception:
+            pass
+        try:
+            R.clear_work(bool(self.v_keepwork.get()))
+        except Exception:
+            pass
+        self.destroy()
 
     # ----------------------------------------------------------- looks
     def _skin(self):
@@ -195,6 +210,15 @@ class App(tk.Tk):
         self.ff_lbl = ttk.Label(f, text="checking\u2026", style="Dim.TLabel")
         self.ff_lbl.pack(side="left")
         ttk.Button(f, text="Get it", command=self.get_ffmpeg).pack(side="left", padx=10)
+
+        f = self._row(four, "Language you speak in the video",
+                      "fa for Persian, en for English. Leave it blank to let it work out.")
+        self.v_lang = tk.StringVar(value=str(self.cfg.get("language", "")))
+        ttk.Entry(f, textvariable=self.v_lang, width=10).pack(side="left")
+        self.v_proof = tk.BooleanVar(value=bool(self.cfg.get("proofread", True)))
+        ttk.Checkbutton(f, variable=self.v_proof,
+                        text="Tidy up the transcript's spelling before translating"
+                        ).pack(side="left", padx=16)
 
         f = self._row(four, "The local voice",
                       "Only needed for a voice of your own. A few gigabytes, installed in .venv "
@@ -432,6 +456,8 @@ class App(tk.Tk):
         c["max_tempo"] = round(float(self.v_tempo.get()), 3)
         c["review"] = bool(self.v_review.get())
         c["keep_work"] = bool(self.v_keepwork.get())
+        c["language"] = self.v_lang.get().strip()
+        c["proofread"] = bool(self.v_proof.get())
         for k, var in self.v_adv.items():
             raw = var.get().strip()
             if not raw:

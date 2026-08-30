@@ -92,7 +92,7 @@ def main():
     R.WORK = os.path.join(work, "work")
     R.OUT = os.path.join(work, "out")
     R.key = lambda: "not-used"
-    R.config = lambda: dict(R.DEFAULTS, keep_work=True)
+    R.config = lambda: dict(R.DEFAULTS, keep_work=True, proofread=False)
 
     # --- it stops for you before it speaks anything ---
     sys.argv = ["replacer.py", video]
@@ -199,6 +199,25 @@ def main():
     terms = R.glossary()
     check(21, "the glossary is read", isinstance(terms, list))
 
+    # --- walking away must not leave a lecture lying about ---
+    left = os.path.join(work, "work2")
+    R.WORK = left
+    R.OUT = os.path.join(work, "out2")
+    R.config = lambda: dict(R.DEFAULTS, keep_work=False, proofread=False)
+    R.convert(video, say=lambda m: None, ask=lambda segs: None)
+    inside = os.listdir(left) if os.path.isdir(left) else []
+    check(22, "cancelling clears what it had started", not inside, inside)
+
+    # --- and closing the app clears everything, unless you asked to keep it ---
+    os.makedirs(os.path.join(left, "something"), exist_ok=True)
+    R.clear_work(keep=True)
+    kept = os.path.isdir(os.path.join(left, "something"))
+    R.clear_work(keep=False)
+    now = os.listdir(left) if os.path.isdir(left) else []
+    check(23, "closing clears the work folder", kept and not now, "kept-when-asked=%s" % kept)
+
+    R.WORK = os.path.join(work, "work")
+    R.OUT = os.path.join(work, "out")
     print("\n--- the report it wrote ---")
     print(rep.strip()[:700])
     shutil.rmtree(work, ignore_errors=True)

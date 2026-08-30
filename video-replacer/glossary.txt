@@ -1,15 +1,44 @@
-# Words the translator would otherwise get wrong.
+# Words the transcriber and the translator would otherwise get wrong.
 #
-# One per line:   what it sounds like in Persian  =  what it must be in English
+# One per line:   what it sounds like  =  what it must be
 #
-# A name you invented has no translation. Said out loud, MLAD comes back from
-# the transcriber as ملاد, and the writer turns that into "Milad" - a different
-# thing, in every line. One line here fixes it once, for every video from now on.
+# TWO KINDS OF PROBLEM, ONE FILE.
 #
-# Lines starting with # are ignored. Delete these examples and put your own.
+# 1. NAMES WITH NO TRANSLATION. Say MLAD out loud in Persian and it comes back
+#    as ملاد, and the writer turns that into "Milad" - a different thing, in
+#    every line, in every video.
+#
+# 2. ENGLISH WORDS INSIDE A PERSIAN SENTENCE. This turned out to be most of the
+#    errors, measured on a real lecture: "config" came back as کانفک, "Add Voice"
+#    as اد ویس, "Add Output" as اد پود. Both sides of every line below are given
+#    to the transcriber before it listens, and knowing a word is coming is what
+#    lets it hear the word.
+#
+# So: put in the English terms you actually say out loud. It costs nothing and
+# it is the single most effective thing in this whole app for your Persian.
+#
+# Lines starting with # are ignored.
 
 ملاد = MLAD
-اسپین = Spin
-کلیپ = clip
+
+# --- the software you demonstrate ---
+کانفیگ = config
+اینپوت = input
+اوتپوت = output
+ادویس = Add Voice
+ویس = voice
+ریویو = review
+اپروو = approve
+سورس = source
 لینک = link
+کلیپ = clip
+اسپین = Spin
 کانتنت = Content
+ریسورس = Resources
+اسلاید = slide
+فایل = file
+
+# --- finance words you teach with ---
+دیسکانت = discount
+کش فلو = cash flow
+اکسل = Excel

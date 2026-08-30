@@ -96,6 +96,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
   <a href="#run">Running one</a>
   <a href="#review">Checking it before it speaks</a>
   <a href="#glossary">Words it gets wrong</a>
+  <a href="#persian">Getting your own language right</a>
   <a href="#outputs">What comes out</a>
   <a href="#report">Reading the report</a>
   <a href="#voice">Choosing the voice</a>
@@ -190,6 +191,12 @@ type into &mdash; the English that will be spoken over it.</p>
 <p>Fix whatever is wrong and press <b>Approve and make the video</b>. Press <b>Cancel</b> and
 nothing further happens.</p>
 
+<div class="note"><b>Walking away is a decision</b>
+Press <b>Cancel</b>, or close the app, and everything it had started in <code>work\</code> is
+deleted. A half-finished transcript of a private lecture is not something to leave lying about.
+The only exception is if you ticked <i>Keep the working files</i> in Settings, which exists so a
+long run that failed can pick up where it stopped.</div>
+
 <div class="good"><b>This is the cheap moment</b>
 Nothing has been spoken when that panel opens, and nothing has been spent on the voice. A name
 the translator got wrong costs nothing to fix here and a whole run to fix afterwards.</div>
@@ -256,6 +263,43 @@ in every video.</p>
 <p>Those are handed to the writer as terms it must use exactly as written. The
 review sheet is for the mistake that happened once; the glossary is for the one
 that would keep happening.</p>
+
+<h2 id="persian">Getting your own language right</h2>
+
+<p>The transcript of what you actually said comes back with mistakes. It is worth knowing
+exactly which mistakes, because two of the three kinds are fixable and one is not.</p>
+
+<p>Measured on one real minute of lecture, four ways:</p>
+
+<table>
+  <thead><tr><th>What was tried</th><th>What changed</th></tr></thead>
+  <tbody>
+    <tr><td>whisper-1, as it was</td><td>the baseline</td></tr>
+    <tr><td>+ told the language</td><td><b>nothing at all</b> &mdash; the two came back identical, so it had already worked the language out</td></tr>
+    <tr><td>+ given the glossary as a hint</td><td><b>the big one.</b> "Add Voice" instead of اد ویس, "Output" instead of اد پود, تبدیل instead of تبلیل</td></tr>
+    <tr><td>gpt-4o-transcribe instead</td><td>not better. Different mistakes, not fewer &mdash; and no timestamps, so it cannot be used here anyway</td></tr>
+  </tbody>
+</table>
+
+<div class="good"><b>Put the English words you say out loud into the glossary</b>
+This turned out to be most of the errors. An English word inside a Persian sentence gets written
+back phonetically &mdash; "config" as کانفک, "Add Voice" as اد ویس. Both sides of every glossary
+line are handed to the transcriber <em>before</em> it listens, and knowing a word is coming is
+what lets it hear the word. It costs nothing.</div>
+
+<p>What is left is repaired afterwards. By the time a mishearing reaches the transcript it is a
+<em>spelling</em> problem &mdash; ضب for ضبط, گذینه for گزینه &mdash; and something that reads the
+language can fix that without hearing the audio again. That is the <b>Tidy up the transcript's
+spelling</b> tick in Settings. It is told firmly not to invent: where a passage is genuinely
+unclear it is left alone, because an obviously wrong word is better than a confidently wrong
+sentence.</p>
+
+<div class="warn"><b>It will still not be as good as YouTube</b>
+YouTube's Persian is better than anything reachable here, and that is worth saying plainly rather
+than pretending otherwise. Its captions cannot be used &mdash; see <a href="#noyoutube">Why not
+YouTube</a> &mdash; so the honest position is: the glossary and the tidy-up close most of the gap,
+and the review panel is there for the rest. Anything the transcript still gets wrong, you can fix
+in the panel before a word of it is spoken.</div>
 
 <h2 id="outputs">What comes out</h2>
 

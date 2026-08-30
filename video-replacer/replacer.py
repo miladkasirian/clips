@@ -54,6 +54,8 @@ DEFAULTS = {
     "min_tempo":   0.90,             # slowing a short line down, gently
     "longest_line": 10.0,            # fragments are joined into sentences up to this long
     "join_gap":     0.8,             # ...as long as the pause between them is under this
+    "language":     "",              # "fa", "en"... blank lets it work the language out
+    "proofread":    True,            # repair the transcript's spelling before translating
     "review":       True,            # stop and show the English before speaking it
     "chunk_minutes": 12,             # transcription is sent in pieces this long
     "batch":       40,               # segments per translation request
@@ -252,16 +254,32 @@ def decode_pcm(path, rate, tempo=1.0):
 
 
 # ----------------------------------------------------------------- the work
+def hint(cfg):
+    """What to expect. Measured on a real lecture: this is the single change that
+    improved the Persian most - "tabdil" came back as تبلیل without it and تبدیل
+    with it. Both sides of the glossary go in, because half the errors are English
+    words spoken inside a Persian sentence and written back phonetically: "config"
+    as کانفک, "Add Voice" as اد ویس."""
+    terms = []
+    for a, b in glossary():
+        terms += [a, b]
+    if not terms:
+        return ""
+    return "A university lecture. Words used: " + ", ".join(dict.fromkeys(terms))
+
+
 def transcribe(chunks, cfg, k):
     """Segments with real timestamps, on the clock of the whole lecture."""
     segs = []
+    tip, lang = hint(cfg), str(cfg.get("language", "")).strip()
     for i, (path, offset) in enumerate(chunks, 1):
         size = os.path.getsize(path) / 1e6
         log("     piece %d of %d  (%.1f MB)" % (i, len(chunks), size))
-        body, ctype = multipart(
-            {"model": cfg["transcribe"], "response_format": "verbose_json",
-             "timestamp_granularities": ["segment"]},
-            os.path.basename(path), open(path, "rb").read())
+        fields = {"model": cfg["transcribe"], "response_format": "verbose_json",
+                  "timestamp_granularities": ["segment"]}
+        if lang: fields["language"] = lang
+        if tip:  fields["prompt"] = tip
+        body, ctype = multipart(fields, os.path.basename(path), open(path, "rb").read())
         raw = post("https://api.openai.com/v1/audio/transcriptions", body,
                    {"Authorization": "Bearer " + k, "Content-Type": ctype})
         got = json.loads(raw)
@@ -334,6 +352,55 @@ def budget(segs, i, cps=WORDS_PER_SECOND):
     """How many words this line has room for, from the gap to the next one."""
     nxt = segs[i + 1]["start"] if i + 1 < len(segs) else segs[i]["end"] + 3.0
     return max(3, int((nxt - segs[i]["start"]) * cps))
+
+
+PROOF = (
+    "You are correcting the automatic transcript of a university lecture. The speaker mixes his "
+    "own language with English technical words, and the transcriber mishears things a reader "
+    "would fix instantly from context: letters that sound the same, words split or run together, "
+    "and English terms written back phonetically.\n"
+    "Fix the spelling and the word boundaries so it reads correctly. Write English technical "
+    "words in Latin letters where that is plainly what was said.\n"
+    "Do NOT translate. Do NOT summarise. Do NOT add, remove or reorder anything, and do not "
+    "invent a word to fill a gap - where a passage is genuinely unclear, leave it exactly as it "
+    "is. You are proofreading, not rewriting.\n"
+    "Reply with a JSON object whose keys are the line numbers you were given and whose values "
+    "are the corrected text. Nothing else."
+)
+
+
+def proofread(segs, cfg, k):
+    """The transcriber's mistakes are spelling by the time they reach here, and
+    spelling can be fixed by something that reads the language - without ever
+    hearing the audio again. It is told firmly not to invent: a wrong word is
+    better than a confident wrong sentence, because the wrong word is obvious."""
+    size = max(5, int(cfg.get("batch", 40)))
+    terms = glossary()
+    rules = PROOF
+    if terms:
+        rules += "\n\nThese are fixed: " + ", ".join("%s -> %s" % (a, b) for a, b in terms)
+    fixed = 0
+    for a in range(0, len(segs), size):
+        part = segs[a:a + size]
+        lines = "\n".join("%d. %s" % (a + i + 1, s["said"]) for i, s in enumerate(part))
+        try:
+            body = json.dumps({"model": cfg["writer"], "temperature": 0.1,
+                               "response_format": {"type": "json_object"},
+                               "messages": [{"role": "system", "content": rules},
+                                            {"role": "user", "content": lines}]}).encode()
+            got = json.loads(json.loads(post(
+                "https://api.openai.com/v1/chat/completions", body,
+                {"Authorization": "Bearer " + k,
+                 "Content-Type": "application/json"}))["choices"][0]["message"]["content"])
+        except Exception as e:
+            log("     (could not tidy lines %d-%d: %s)" % (a + 1, a + len(part), str(e)[:60]))
+            continue
+        for i in range(len(part)):
+            new = got.get(str(a + i + 1))
+            if new and str(new).strip() and str(new).strip() != part[i]["said"].strip():
+                part[i]["said"] = re.sub(r"\s+", " ", str(new)).strip()
+                fixed += 1
+    return segs, fixed
 
 
 TRANSLATE = (
@@ -772,6 +839,22 @@ def mux(video, track, dest):
          "-shortest", "-movflags", "+faststart", dest])
 
 
+def clear_work(keep=False):
+    """Everything in work\\ is a piece of somebody's lecture. It exists only
+    while a run is going; when the app closes it should not still be there."""
+    if keep or not os.path.isdir(WORK):
+        return 0
+    gone = 0
+    for name in os.listdir(WORK):
+        path = os.path.join(WORK, name)
+        try:
+            shutil.rmtree(path) if os.path.isdir(path) else os.remove(path)
+            gone += 1
+        except Exception:
+            pass
+    return gone
+
+
 def convert(video, cfg=None, say=None, ask=None, out_dir=None):
     """The whole pipeline, once.
 
@@ -813,6 +896,9 @@ def convert(video, cfg=None, say=None, ask=None, out_dir=None):
         raw_count = len(segs)
         segs = merge(segs, float(cfg.get("longest_line", 10.0)), float(cfg.get("join_gap", 0.8)))
         log("     %d fragments joined into %d sentences" % (raw_count, len(segs)))
+        if cfg.get("proofread", True):
+            segs, fixed = proofread(segs, cfg, k)
+            log("     %d line%s tidied up" % (fixed, "" if fixed == 1 else "s"))
         json.dump(segs, open(segs_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     if not segs:
         die("Nothing was heard in that recording.")
@@ -835,7 +921,12 @@ def convert(video, cfg=None, say=None, ask=None, out_dir=None):
     if ask is not None:
         segs = ask(segs)
         if segs is None:
-            log("  stopped before anything was spoken.")
+            # Walking away at the review panel is a decision, not a pause. What
+            # is left behind is a half-done transcript of a private lecture, so
+            # unless you asked to keep it, it goes.
+            if not cfg.get("keep_work"):
+                shutil.rmtree(folder, ignore_errors=True)
+            log("  stopped before anything was spoken. Nothing was left behind.")
             return None
         json.dump(segs, open(en_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
