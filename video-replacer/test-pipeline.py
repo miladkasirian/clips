@@ -18,6 +18,7 @@ sys.path.insert(0, HERE)
 import replacer as R
 
 REAL_CONFIG = R.config          # main() stubs it out; the window needs the real one
+REAL_YT = R.yt_transcript      # and so does the check that the upload is deleted
 
 ok = lambda b: "PASS" if b else "**FAIL**"
 fails = []
@@ -109,16 +110,16 @@ def window_checks(work):
         app.v_out.set(os.path.join(work, "elsewhere"))
         app.v_cuda.set(False)
         app.v_in.set(os.path.join(work, "a lecture.mp4"))
-        app.v_link.set("https://youtu.be/dQw4w9WgXcQ")
         app.v_source.set("youtube")
         app.v_lang.set("Hindi \u0939\u093f\u0928\u094d\u0926\u0940")
         app.v_proof.set(False)
         app.v_keepwork.set(True)
         app.update()
-        shown = bool(app.link_box.winfo_ismapped())
+        yt_hint = app.vid_hint.cget("text")
         app.v_source.set("here"); app.update()
-        hidden = not app.link_box.winfo_ismapped()
+        here_hint = app.vid_hint.cget("text")
         app.v_source.set("youtube"); app.update()
+        app.v_ytdel.set(False); app.v_ytwait.set("7")
 
         wrote = app.settings()
         json.dump(wrote, open(saved, "w", encoding="utf-8"), indent=2)
@@ -126,7 +127,8 @@ def window_checks(work):
 
         again = m.App(); again.update()
         back = {"out_dir": again.v_out.get(), "use_gpu": again.v_cuda.get(),
-                "last_video": again.v_in.get(), "youtube_link": again.v_link.get(),
+                "last_video": again.v_in.get(), "youtube_delete": again.v_ytdel.get(),
+                "youtube_wait_minutes": int(again.v_ytwait.get()),
                 "transcript_from": again.v_source.get(), "language": again.v_lang.get(),
                 "proofread": again.v_proof.get(), "keep_work": again.v_keepwork.get()}
         st = ttk.Style(again)
@@ -151,13 +153,99 @@ def window_checks(work):
     check(30, "every setting the window offers comes back after a restart",
           back == {"out_dir": os.path.join(work, "elsewhere"), "use_gpu": False,
                    "last_video": os.path.join(work, "a lecture.mp4"),
-                   "youtube_link": "https://youtu.be/dQw4w9WgXcQ",
+                   "youtube_delete": False, "youtube_wait_minutes": 7,
                    "transcript_from": "youtube",
                    "language": "Hindi \u0939\u093f\u0928\u094d\u0926\u0940",
                    "proofread": False, "keep_work": True}, back)
-    check(31, "the YouTube link box appears only when it is going to be used",
-          shown and hidden)
+    check(31, "the video row says who is going to listen to it, and changes with the choice",
+          "YouTube" in yt_hint and "deleted" in yt_hint
+          and "Whisper" in here_hint and "never uploaded" in here_hint,
+          [yt_hint[:50], here_hint[:50]])
     check(32, "no tick or radio goes pale under the pointer", not pale, pale[:3])
+
+
+def youtube_checks(work):
+    """The upload path cannot be tried against the real YouTube without spending
+    quota and putting a lecture on somebody's channel, so the requests it builds
+    are checked instead: what it sends, in what order, and - the one that
+    matters - that the upload comes down again even when nothing else works."""
+    import urllib.error, urllib.request
+
+    real = urllib.request.urlopen
+    big = os.path.join(work, "big.mp4")
+    io.open(big, "wb").write(b"x" * (5 << 20))          # 5 MB, so it takes two chunks
+    seen = []
+
+    class Fake(object):
+        def __init__(self, body=b"{}", headers=None):
+            self.body, self.headers, self.status = body, headers or {}, 200
+        def read(self): return self.body
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake(req, timeout=None):
+        seen.append({"url": req.full_url, "method": req.get_method(),
+                     "headers": dict(req.headers),
+                     "len": len(req.data) if req.data else 0,
+                     "body": req.data if (req.data and len(req.data) < 4000) else None})
+        if req.get_method() == "POST":
+            return Fake(b"{}", {"Location": "https://upload.example/session"})
+        if req.get_method() == "PUT":
+            rng = req.headers.get("Content-range", "")
+            if rng.split("/")[0].split("-")[-1] == str(len(b"x" * (5 << 20)) - 1):
+                return Fake(b'{"id":"VID12345678"}')
+            raise urllib.error.HTTPError(req.full_url, 308, "Resume", {}, io.BytesIO(b""))
+        return Fake(b"{}")
+
+    urllib.request.urlopen = fake
+    try:
+        vid = R.yt_upload(big, "tok", say=lambda m: None, chunk=4 << 20)
+        posts = [r for r in seen if r["method"] == "POST"]
+        puts = [r for r in seen if r["method"] == "PUT"]
+        meta = json.loads(posts[0]["body"])
+        sent = sum(r["len"] for r in puts)
+        ranges = [r["headers"].get("Content-range") for r in puts]
+    finally:
+        urllib.request.urlopen = real
+
+    check(33, "the upload goes up unlisted, whole, and in order",
+          vid == "VID12345678"
+          and meta["status"]["privacyStatus"] == "unlisted"
+          and posts[0]["headers"].get("X-upload-content-length") == str(5 << 20)
+          and sent == (5 << 20) and len(puts) == 2
+          and ranges == ["bytes 0-4194303/5242880", "bytes 4194304-5242879/5242880"],
+          ranges)
+
+    # --- and it comes down again, even when everything after it fails ---
+    deleted = []
+
+    def fake2(req, timeout=None):
+        m = req.get_method()
+        if m == "POST":
+            return Fake(b"{}", {"Location": "https://upload.example/session"})
+        if m == "PUT":
+            return Fake(b'{"id":"VID12345678"}')
+        if m == "DELETE":
+            deleted.append(req.full_url)
+            return Fake(b"")
+        raise urllib.error.HTTPError(req.full_url, 403, "no", {}, io.BytesIO(
+            b'{"error":{"message":"the caption track cannot be downloaded"}}'))
+
+    urllib.request.urlopen = fake2
+    R.yt_access = lambda: "tok"
+    small = os.path.join(work, "small.mp4")
+    io.open(small, "wb").write(b"x" * 1000)
+    why = ""
+    try:
+        REAL_YT(small, {"youtube_wait_minutes": 1}, say=lambda m: None)
+    except Exception as e:
+        why = str(e)
+    finally:
+        urllib.request.urlopen = real
+
+    check(34, "the upload is deleted even when the captions never arrive",
+          len(deleted) == 1 and "VID12345678" in deleted[0] and "captions" in why.lower(),
+          [deleted, why[:60]])
 
 
 def main():
@@ -341,24 +429,24 @@ def main():
           cues)
 
     asked = []
-    R.yt_transcript = lambda link, say=None: (
-        asked.append(link) or [{"start": a, "end": b, "said": fa} for a, b, fa, en in SAID])
+    R.yt_transcript = lambda vid, cfg=None, say=None: (
+        asked.append(vid) or [{"start": a, "end": b, "said": fa} for a, b, fa, en in SAID])
     yt = os.path.join(work, "yt")
     R.WORK = yt
     R.OUT = os.path.join(work, "out3")
     R.config = lambda: dict(R.DEFAULTS, keep_work=True, proofread=False,
-                            transcript_from="youtube", youtube_link="https://youtu.be/abcdefghijk")
+                            transcript_from="youtube")
     R.convert(video, say=lambda m: None, ask=lambda segs: segs)
     heard = os.path.join(yt, "lecture", "heard.json")
     voice = os.path.join(yt, "lecture", "voice.mp3")
     check(28, "asking YouTube uses its words, and never touches the audio",
-          asked == ["https://youtu.be/abcdefghijk"] and os.path.exists(heard)
+          asked == [video] and os.path.exists(heard)
           and not os.path.exists(voice)
           and os.path.exists(os.path.join(work, "out3", "lecture.en.mp4")),
           "audio made=%s" % os.path.exists(voice))
 
     # --- and when YouTube says no, the run carries on rather than stopping ---
-    def refuse(link, say=None):
+    def refuse(vid, cfg=None, say=None):
         raise RuntimeError("no captions on that video")
 
     R.yt_transcript = refuse
@@ -377,6 +465,7 @@ def main():
     R.WORK = os.path.join(work, "work")
     R.OUT = os.path.join(work, "out")
     window_checks(work)
+    youtube_checks(work)
     print("\n--- the report it wrote ---")
     print(rep.strip()[:700])
     shutil.rmtree(work, ignore_errors=True)

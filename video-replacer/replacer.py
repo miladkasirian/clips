@@ -95,7 +95,8 @@ DEFAULTS = {
     "join_gap":     0.8,             # ...as long as the pause between them is under this
     "language":     "",              # "fa", "en"... blank lets it work the language out
     "transcript_from": "here",       # "here" = OpenAI; "youtube" = your own upload
-    "youtube_link":    "",           # the unlisted video, when transcript_from is youtube
+    "youtube_wait_minutes": 20,      # how long to wait for YouTube to write the captions
+    "youtube_delete":  True,         # take the upload down again once we have the words
     "out_dir":         "",           # where results go; blank means output\\ beside the app
     "use_gpu":         True,         # the graphics card, when installing the local voice
     "last_video":      "",           # so the app opens on the file you were working on
@@ -1067,42 +1068,146 @@ def parse_srt(text):
     return out
 
 
-def yt_transcript(link, say=None):
-    """The words YouTube heard, with their timings. Raises with a plain reason
-    if it cannot have them - the caller decides whether to fall back."""
-    say = say or log
-    vid = yt_video_id(link)
-    if not vid:
-        raise RuntimeError("That is not a YouTube link: %s" % (link or "(empty)"))
-    tok = yt_access()
-    if not tok:
-        raise RuntimeError("Not signed in to YouTube. Settings -> YouTube -> Sign in.")
+def yt_upload(path, tok, say=None, chunk=8 << 20):
+    """Put the lecture on your own channel, unlisted, so YouTube will transcribe
+    it. Resumable and chunked, because a lecture can be half a gigabyte and a
+    single POST that dies at 90% is a wasted half hour.
 
+    Nothing about this is permanent: the caller deletes the video again the
+    moment it has the words."""
+    say = say or log
+    total = os.path.getsize(path)
+    meta = json.dumps({
+        "snippet": {"title": os.path.splitext(os.path.basename(path))[0][:100],
+                    "description": "Uploaded by Course Video Replacer to read back its own "
+                                   "captions. Deleted automatically once they are read.",
+                    "categoryId": "27"},                      # Education
+        "status": {"privacyStatus": "unlisted", "selfDeclaredMadeForKids": False}
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://www.googleapis.com/upload/youtube/v3/videos"
+        "?uploadType=resumable&part=snippet,status",
+        data=meta, method="POST",
+        headers={"Authorization": "Bearer " + tok,
+                 "Content-Type": "application/json; charset=UTF-8",
+                 "X-Upload-Content-Length": str(total),
+                 "X-Upload-Content-Type": "video/*"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            where = r.headers.get("Location")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError("YouTube would not start the upload (%d): %s"
+                           % (e.code, _why(e.read())))
+    if not where:
+        raise RuntimeError("YouTube did not say where to send the video.")
+
+    say("       uploading %.0f MB, unlisted" % (total / 1e6))
+    sent, began, said = 0, time.time(), -1
+    with open(path, "rb") as fh:
+        while sent < total:
+            piece = fh.read(chunk)
+            if not piece:
+                break
+            end = sent + len(piece) - 1
+            put = urllib.request.Request(where, data=piece, method="PUT", headers={
+                "Content-Length": str(len(piece)),
+                "Content-Range": "bytes %d-%d/%d" % (sent, end, total)})
+            try:
+                with urllib.request.urlopen(put, timeout=600) as r:
+                    done = json.loads(r.read() or b"{}")
+                    if done.get("id"):
+                        say("       uploaded in %.0f seconds" % (time.time() - began))
+                        return done["id"]
+            except urllib.error.HTTPError as e:
+                if e.code != 308:              # 308 = keep going, this is normal
+                    raise RuntimeError("The upload failed at %.0f%% (%d): %s"
+                                       % (100.0 * sent / total, e.code, _why(e.read())))
+            sent = end + 1
+            pct = int(100.0 * sent / total)
+            if pct // 10 > said // 10:         # a line every tenth, not every chunk
+                said = pct
+                say("         %d%%" % pct)
+    raise RuntimeError("The upload finished but YouTube never returned a video id.")
+
+
+def yt_delete_video(vid, tok, say=None):
+    """It was only ever there to be transcribed."""
+    say = say or log
+    req = urllib.request.Request("%s/videos?id=%s" % (YT_API, vid), method="DELETE",
+                                 headers={"Authorization": "Bearer " + tok})
+    try:
+        urllib.request.urlopen(req, timeout=60).read()
+        say("       deleted it from your channel")
+        return True
+    except Exception as e:
+        say("       COULD NOT DELETE the upload (%s). It is unlisted on your channel as "
+            "video %s - remove it yourself." % (str(e)[:120], vid))
+        return False
+
+
+def yt_tracks(vid, tok):
     status, body = yt_get("%s/captions?part=snippet&videoId=%s" % (YT_API, vid), tok)
     if status != 200:
         raise RuntimeError("YouTube would not list the captions (%d): %s" % (status, _why(body)))
-    tracks = json.loads(body).get("items") or []
-    if not tracks:
-        raise RuntimeError("That video has no captions yet. YouTube takes a few minutes "
-                           "to write them after an upload finishes.")
+    return json.loads(body).get("items") or []
 
-    # the machine-made one is what we came for; a typed one is even better
-    tracks.sort(key=lambda t: 0 if t["snippet"].get("trackKind") != "ASR" else 1)
-    last = ""
+
+def yt_wait(vid, tok, minutes, say=None):
+    """YouTube writes the captions when it gets round to it. Usually a couple of
+    minutes; sometimes not. Waiting is the only thing to be done, so it waits out
+    loud rather than looking hung."""
+    say = say or log
+    deadline = time.time() + minutes * 60
+    while True:
+        tracks = yt_tracks(vid, tok)
+        if tracks:
+            return tracks
+        if time.time() > deadline:
+            raise RuntimeError("YouTube had not written any captions after %d minutes."
+                               % minutes)
+        say("       waiting for YouTube to write the captions...")
+        time.sleep(20)
+
+
+def yt_fetch(tracks, tok, say=None):
+    """The best track we are allowed to have, as lines with timings."""
+    say = say or log
+    tracks = sorted(tracks, key=lambda t: 0 if t["snippet"].get("trackKind") != "ASR" else 1)
+    last = "no tracks"
     for t in tracks:
-        s = t["snippet"]
-        made = "typed by hand" if s.get("trackKind") != "ASR" else "written by YouTube"
+        sn = t["snippet"]
+        made = "typed by hand" if sn.get("trackKind") != "ASR" else "written by YouTube"
         status, body = yt_get("%s/captions/%s?tfmt=srt" % (YT_API, t["id"]), tok)
         if status == 200 and body.strip():
             segs = parse_srt(body.decode("utf-8", "replace"))
             if segs:
-                say("       %s, %s: %d lines" % (s.get("language") or "?", made, len(segs)))
+                say("       %s, %s: %d lines" % (sn.get("language") or "?", made, len(segs)))
                 return segs
             last = "the track came back empty"
         else:
             last = _why(body)
-            say("       %s (%s) refused: %s" % (s.get("language") or "?", made, last))
+            say("       %s (%s) refused: %s" % (sn.get("language") or "?", made, last))
     raise RuntimeError("YouTube would not hand over any of its caption tracks. %s" % last)
+
+
+def yt_transcript(video, cfg=None, say=None):
+    """Upload, wait, read the words, delete. You do nothing and nothing is left
+    behind - if the deletion itself fails, that is said out loud with the video
+    id, because a lecture quietly left on a channel is the one outcome that must
+    never happen silently."""
+    cfg = cfg or {}
+    say = say or log
+    tok = yt_access()
+    if not tok:
+        raise RuntimeError("Not signed in to YouTube. Settings -> Your YouTube sign-in -> Sign in.")
+    vid = yt_upload(video, tok, say)
+    try:
+        tracks = yt_wait(vid, tok, int(cfg.get("youtube_wait_minutes", 20)), say)
+        return yt_fetch(tracks, tok, say)
+    finally:
+        if cfg.get("youtube_delete", True):
+            yt_delete_video(vid, tok, say)
 
 
 def convert(video, cfg=None, say=None, ask=None, out_dir=None):
@@ -1154,9 +1259,9 @@ def convert(video, cfg=None, say=None, ask=None, out_dir=None):
             # Its Persian is better than anything reachable through an API, so it
             # is worth asking. If it says no, that is a fact to state out loud
             # and carry on from, not a reason to stop the run.
-            log("       asking YouTube for the transcript of your upload")
+            log("       putting it on your channel so YouTube can transcribe it")
             try:
-                segs = yt_transcript(cfg.get("youtube_link", ""), log)
+                segs = yt_transcript(video, cfg, log)
             except Exception as e:
                 log("       YouTube could not: %s" % e)
                 log("       so it is being transcribed here instead.")

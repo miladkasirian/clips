@@ -47,12 +47,20 @@ class App(tk.Tk):
         super().__init__()
         self.title("Course Video Replacer")
         self.configure(bg=BG)
-        self.geometry("1340x790")
-        self.minsize(1120, 680)
+        # Never a fixed size. A screen with Windows scaling turned up reports
+        # fewer usable units than the number of pixels suggests, and a window
+        # asked for in pixels then opens larger than the desk it has to sit on.
+        want_w, want_h = 1180, 720
+        room_w = self.winfo_screenwidth() - 60
+        room_h = self.winfo_screenheight() - 130      # taskbar, title bar, margin
+        w, h = min(want_w, room_w), min(want_h, room_h)
+        self.geometry("%dx%d+%d+%d" % (w, h, max(0, (room_w - w) // 2), 24))
+        self.minsize(min(940, room_w), min(560, room_h))
         self.cfg = R.config()
         self.q = queue.Queue()
         self.worker = None
         self.answer = queue.Queue()      # the review panel's reply to the pipeline
+        self._panes = []                 # columns that scroll on a short screen
         self._skin()
         self._build()
         self.v_source.trace_add("write", lambda *_: self.show_link())
@@ -123,15 +131,49 @@ class App(tk.Tk):
                    indicatorbackground=[("selected", PAN), ("active", LINE),
                                         ("pressed", LINE), ("!selected", PAN)])
 
+    hintwrap = 540      # narrow enough for the left column; Settings widens it
+
     def _row(self, parent, label, hint=""):
         ttk.Label(parent, text=label, style="H.TLabel").pack(anchor="w", pady=(10, 2))
         if hint:
             # wraplength, or a long sentence simply runs off the right edge and
             # the half you needed is the half you cannot see
             ttk.Label(parent, text=hint, style="Dim.TLabel",
-                      wraplength=880, justify="left").pack(anchor="w", pady=(0, 3))
+                      wraplength=self.hintwrap, justify="left").pack(anchor="w", pady=(0, 3))
         f = ttk.Frame(parent); f.pack(fill="x")
         return f
+
+    def _scrollpane(self, parent):
+        """A column that scrolls when the screen is short. Nothing is ever
+        clipped away where it cannot be reached, whatever size the display is."""
+        holder = ttk.Frame(parent); holder.pack(side="top", fill="both", expand=True)
+        canvas = tk.Canvas(holder, bg=BG, highlightthickness=0, bd=0)
+        bar = ttk.Scrollbar(holder, orient="vertical", command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        window = canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=bar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+
+        def fit(_=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfigure(window, width=canvas.winfo_width())
+            need = inner.winfo_reqheight() > canvas.winfo_height()
+            if need and not bar.winfo_ismapped():
+                bar.pack(side="right", fill="y")
+            elif not need and bar.winfo_ismapped():
+                bar.pack_forget()
+
+        inner.bind("<Configure>", fit)
+        canvas.bind("<Configure>", fit)
+
+        def wheel(e):
+            if self.nb.select() == str(self.nb.nametowidget(self.nb.tabs()[0])) \
+               and bar.winfo_ismapped():
+                canvas.yview_scroll(-1 if e.delta > 0 else 1, "units")
+
+        self.bind_all("<MouseWheel>", wheel, add="+")
+        self._panes.append((canvas, inner))
+        return inner
 
     def _scrolling(self, nb, title):
         """A tab taller than the window. Settings has outgrown one screen, and a
@@ -182,36 +224,26 @@ class App(tk.Tk):
         # is on the right, where it is visible the whole time instead of pushed
         # off the bottom of a tall window.
         cols = ttk.Frame(one); cols.pack(fill="both", expand=True)
-        left = ttk.Frame(cols, width=660); left.pack(side="left", fill="y")
-        left.pack_propagate(False)
-        ttk.Separator(cols, orient="vertical").pack(side="left", fill="y", padx=16)
+        column = ttk.Frame(cols, width=568); column.pack(side="left", fill="y")
+        column.pack_propagate(False)
+        ttk.Separator(cols, orient="vertical").pack(side="left", fill="y", padx=14)
         right = ttk.Frame(cols); right.pack(side="left", fill="both", expand=True)
 
-        f = self._row(left, "Where the words come from")
-        self.v_source = tk.StringVar(
-            value=str(self.cfg.get("transcript_from", "here")).lower())
-        ttk.Radiobutton(f, variable=self.v_source, value="here",
-                        text="Listen to the recording").pack(side="left")
-        ttk.Radiobutton(f, variable=self.v_source, value="youtube",
-                        text="Take them from a YouTube copy").pack(side="left", padx=(18, 0))
+        # Start and the two ticks live outside the scrolling part, pinned to the
+        # bottom of the column: on a small screen the settings above them may
+        # need scrolling, but the button you came to press never moves.
+        anchor = ttk.Frame(column); anchor.pack(side="bottom", fill="x")
+        left = self._scrollpane(column)
 
         f = self._row(left, "The video")
         self.vid_hint = ttk.Label(left, text="", style="Dim.TLabel",
-                                  wraplength=640, justify="left")
+                                  wraplength=540, justify="left")
         self.vid_hint.pack(anchor="w", pady=(0, 3), before=f)
         self.v_in = tk.StringVar(value=str(self.cfg.get("last_video", "")))
         ttk.Entry(f, textvariable=self.v_in).pack(side="left", fill="x", expand=True)
         ttk.Button(f, text="Choose…", command=self.pick_in).pack(side="left", padx=(8, 0))
 
-        # shown only when the words are coming from YouTube
-        self.link_box = ttk.Frame(left)
-        f = self._row(self.link_box, "The YouTube link",
-                      "The same lecture, uploaded to your own channel as Unlisted.")
-        self.v_link = tk.StringVar(value=str(self.cfg.get("youtube_link", "")))
-        ttk.Entry(f, textvariable=self.v_link).pack(side="left", fill="x", expand=True)
-
-        self.lang_box = ttk.Frame(left); self.lang_box.pack(fill="x")
-        f = self._row(self.lang_box, "The language you speak in the video",
+        f = self._row(left, "The language you speak in the video",
                       "It works this out from the audio on its own, and English is what comes "
                       "out whichever language went in. Name it only if the guess wanders.")
         self.v_lang = tk.StringVar(value=R.language_label(self.cfg.get("language", "")))
@@ -237,20 +269,18 @@ class App(tk.Tk):
 
         # anchored to the bottom of the column: whatever else is on screen, the
         # button you came here to press is never the thing that falls off it
-        go = ttk.Frame(left); go.pack(side="bottom", fill="x", pady=(14, 2))
+        self.v_review = tk.BooleanVar(value=bool(self.cfg.get("review", True)))
+        ttk.Checkbutton(anchor, variable=self.v_review,
+                        text="Show me every line first, so I can fix a word before it is spoken"
+                        ).pack(anchor="w", pady=(10, 0))
+        self.v_remember = tk.BooleanVar(value=True)
+        ttk.Checkbutton(anchor, variable=self.v_remember,
+                        text="Remember these settings").pack(anchor="w", pady=(4, 0))
+        go = ttk.Frame(anchor); go.pack(fill="x", pady=(12, 2))
         self.btn = ttk.Button(go, text="Start", style="Go.TButton", command=self.start)
         self.btn.pack(side="left")
         self.status = ttk.Label(go, text="", style="Dim.TLabel")
         self.status.pack(side="left", padx=14)
-
-        f = ttk.Frame(left); f.pack(side="bottom", fill="x", pady=(12, 0))
-        self.v_review = tk.BooleanVar(value=bool(self.cfg.get("review", True)))
-        ttk.Checkbutton(f, variable=self.v_review,
-                        text="Show me every line first, so I can fix a word before it is spoken"
-                        ).pack(anchor="w")
-        self.v_remember = tk.BooleanVar(value=True)
-        ttk.Checkbutton(f, variable=self.v_remember,
-                        text="Remember these settings").pack(anchor="w", pady=(4, 0))
 
         ttk.Label(right, text="What it is doing", style="H.TLabel").pack(anchor="w", pady=(0, 6))
         self.logbox = tk.Text(right, width=44, bg="#05080f", fg="#cfe0ff", insertbackground=TXT,
@@ -297,6 +327,7 @@ class App(tk.Tk):
         ttk.Button(three, text="Save", command=self.save_gloss).pack(anchor="e", pady=8)
 
         # ---------------- settings ----------------
+        self.hintwrap = 820          # this tab has the whole width to itself
         f = self._row(four, "Your OpenAI key",
                       "Kept in key.txt beside this app, on this computer. It is never sent anywhere "
                       "but to OpenAI, and never goes into the repository.")
@@ -321,6 +352,32 @@ class App(tk.Tk):
         ttk.Checkbutton(f, variable=self.v_proof,
                         text="Tidy up the transcript's spelling before translating"
                         ).pack(side="left")
+
+        f = self._row(four, "Who writes down what you said",
+                      "Both start from the same mp4. The difference is only which one listens "
+                      "to it.")
+        self.v_source = tk.StringVar(
+            value=str(self.cfg.get("transcript_from", "here")).lower())
+        ttk.Radiobutton(f, variable=self.v_source, value="here",
+                        text="OpenAI Whisper  \u2014 sends the audio, about 36\u00a2 an hour"
+                        ).pack(anchor="w")
+        ttk.Radiobutton(f, variable=self.v_source, value="youtube",
+                        text="YouTube  \u2014 free, and better on Persian"
+                        ).pack(anchor="w", pady=(2, 0))
+        ttk.Label(four, text="If YouTube refuses or takes too long, the run does not stop \u2014 "
+                             "it says so and Whisper writes it instead.",
+                  style="Dim.TLabel", wraplength=820, justify="left").pack(anchor="w")
+
+        f = self._row(four, "The YouTube upload",
+                      "Only used when the Convert tab says the words come from YouTube. The "
+                      "video goes up unlisted, is transcribed, and comes down again.")
+        self.v_ytdel = tk.BooleanVar(value=bool(self.cfg.get("youtube_delete", True)))
+        ttk.Checkbutton(f, variable=self.v_ytdel,
+                        text="Delete the upload once the words are read").pack(side="left")
+        ttk.Label(f, text="   give up waiting after", style="Dim.TLabel").pack(side="left")
+        self.v_ytwait = tk.StringVar(value=str(self.cfg.get("youtube_wait_minutes", 20)))
+        ttk.Entry(f, textvariable=self.v_ytwait, width=5).pack(side="left", padx=6)
+        ttk.Label(f, text="minutes", style="Dim.TLabel").pack(side="left")
 
         f = self._row(four, "Your YouTube sign-in",
                       "One desktop client from the Google Cloud console, signed in once. "
@@ -347,7 +404,7 @@ class App(tk.Tk):
         ttk.Label(four, text="About 3GB more to download and several times faster. An NVIDIA "
                              "card is needed; without one it installs the processor build and "
                              "works anyway, just slower. Untick only if the card will not work.",
-                  style="Dim.TLabel", wraplength=880, justify="left").pack(anchor="w")
+                  style="Dim.TLabel", wraplength=820, justify="left").pack(anchor="w")
 
         adv = ttk.Frame(four); adv.pack(fill="x", pady=(18, 0))
         ttk.Label(adv, text="Rarely worth changing", style="H.TLabel").pack(anchor="w")
@@ -376,7 +433,7 @@ class App(tk.Tk):
         ttk.Label(adv, text="A second run then skips what is already done and does not pay for "
                             "it twice. Off by default: what is in work\\ is a half-finished "
                             "transcript of a lecture.",
-                  style="Dim.TLabel", wraplength=880, justify="left").pack(anchor="w")
+                  style="Dim.TLabel", wraplength=820, justify="left").pack(anchor="w")
         ttk.Label(adv, text="Everything on this page is saved when you tick “Remember these "
                             "settings” and press Start.", style="Dim.TLabel").pack(anchor="w", pady=(10, 0))
         self.after(200, self.check_tools)
@@ -466,21 +523,17 @@ class App(tk.Tk):
         messagebox.showinfo("Saved", "The key is in key.txt beside this app.")
 
     def show_link(self):
-        """One of the two inputs at a time. The link box is not there at all
-        unless the words are coming from YouTube - an empty box for something
-        you are not using is a question you should not have been asked.
-
-        The mp4 stays either way, and the hint says why: the finished file is a
-        video, and the picture can only come from the recording. YouTube can
-        give us the words; it cannot give us your footage."""
+        """The mp4 is the only input either way. All that changes is who listens
+        to it, and the video row says which - so the choice is visible where the
+        work starts, without being a question asked twice."""
         if self.v_source.get() == "youtube":
-            self.link_box.pack(fill="x", before=self.lang_box)
             self.vid_hint.config(
-                text="Still needed — the picture comes from here. Only the words are "
-                     "taken from YouTube.")
+                text="The mp4 you recorded. YouTube writes the words: it goes up to your "
+                     "channel unlisted and is deleted again straight afterwards.")
         else:
-            self.link_box.pack_forget()
-            self.vid_hint.config(text="The mp4 you recorded. Nothing about it is re-encoded.")
+            self.vid_hint.config(
+                text="The mp4 you recorded. Whisper writes the words, from the sound only \u2014 "
+                     "the video itself is never uploaded anywhere.")
 
     def yt_status(self):
         """Says which of the two steps is still missing, rather than just 'no'."""
@@ -659,9 +712,13 @@ class App(tk.Tk):
         c["language"] = R.language_code(self.v_lang.get())
         c["proofread"] = bool(self.v_proof.get())
         c["transcript_from"] = self.v_source.get()
-        c["youtube_link"] = self.v_link.get().strip()
         c["out_dir"] = self.v_out.get().strip()
         c["use_gpu"] = bool(self.v_cuda.get())
+        c["youtube_delete"] = bool(self.v_ytdel.get())
+        try:
+            c["youtube_wait_minutes"] = max(1, int(float(self.v_ytwait.get())))
+        except ValueError:
+            pass
         c["last_video"] = self.v_in.get().strip('" ')
         for k, var in self.v_adv.items():
             raw = var.get().strip()
