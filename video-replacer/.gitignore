@@ -2,6 +2,7 @@ key.txt
 work/
 input/
 output/
+samples/
 ffmpeg/
 *.mp4
 *.zip

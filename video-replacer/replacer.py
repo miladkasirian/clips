@@ -41,6 +41,8 @@ DEFAULTS = {
     "voice":       "onyx",
     "max_tempo":   1.20,             # 1.0 = never speed up. Past ~1.3 it is audible
     "min_tempo":   0.90,             # slowing a short line down, gently
+    "longest_line": 10.0,            # fragments are joined into sentences up to this long
+    "join_gap":     0.8,             # ...as long as the pause between them is under this
     "chunk_minutes": 12,             # transcription is sent in pieces this long
     "batch":       40,               # segments per translation request
     "sample_rate": 24000,            # what the speech endpoint returns
@@ -49,8 +51,21 @@ DEFAULTS = {
 
 
 # ----------------------------------------------------------------- plumbing
+# The Windows console is cp1252 by default, and the first line this printed of a
+# Persian transcript killed the run outright. Nothing here is worth losing an
+# hour's work over: say it in UTF-8, and replace anything the console cannot draw.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 def log(msg):
-    print(msg, flush=True)
+    try:
+        print(msg, flush=True)
+    except Exception:
+        print(str(msg).encode("ascii", "replace").decode("ascii"), flush=True)
 
 
 def die(msg):
@@ -249,6 +264,39 @@ def transcribe(chunks, cfg, k):
     return segs
 
 
+WORDS_PER_SECOND = 2.6      # measured: what the voice actually speaks at
+
+
+def merge(segs, longest=10.0, gap=0.8):
+    """Join the fragments into sentences.
+
+    WHY THIS IS THE WHOLE FIX. A 100-second lecture came back as 36 pieces, some
+    of them two seconds long. Two seconds holds about five spoken words, and
+    "When I select Spin here, the videos start playing" is nine - so that line
+    could not fit however it was written, while "And there," next door sat in
+    two seconds with nothing to do. Neither piece can borrow from the other
+    while they are separate lines. Merged, the pair has plenty of room.
+
+    Nothing is lost: the merged line keeps the start of the first fragment and
+    the end of the last, so it still sits on the same stretch of video.
+    """
+    out = []
+    for s in segs:
+        if out and (s["start"] - out[-1]["end"] <= gap
+                    and s["end"] - out[-1]["start"] <= longest):
+            out[-1]["end"] = s["end"]
+            out[-1]["said"] = (out[-1]["said"].rstrip() + " " + s["said"].lstrip()).strip()
+        else:
+            out.append(dict(s))
+    return out
+
+
+def budget(segs, i, cps=WORDS_PER_SECOND):
+    """How many words this line has room for, from the gap to the next one."""
+    nxt = segs[i + 1]["start"] if i + 1 < len(segs) else segs[i]["end"] + 3.0
+    return max(3, int((nxt - segs[i]["start"]) * cps))
+
+
 TRANSLATE = (
     "You are turning a university lecturer's own recording into the English he would have "
     "spoken himself. The input may be Persian or English, and it is speech, so it rambles, "
@@ -257,9 +305,13 @@ TRANSLATE = (
     "actually talks to a room, not written prose. Fix every grammatical error. Keep his "
     "meaning, his emphasis and his examples exactly; keep every number, name and technical "
     "term.\n"
-    "LENGTH MATTERS: each line is spoken over the same moment of video it came from, so keep "
-    "it close to the same spoken length. Shorter is safer than longer. Cut the false starts, "
-    "the 'um's and the repetitions - that is where the room comes from.\n"
+    "LENGTH IS A HARD CONSTRAINT, not a preference. Each line is spoken out loud over the "
+    "same moment of video it came from, and the number in [brackets] after the line number is "
+    "the MOST words that will fit in that moment. Go over it and the voice has to be sped up "
+    "or run into the next line.\n"
+    "Say the same thing in fewer words. Drop the false starts, the 'um's, the repetitions and "
+    "the throat-clearing - that is where the room comes from, and it is why the English is "
+    "better than the dictation, not worse. If it will not fit, cut a clause, not a fact.\n"
     "Do not merge lines, do not split them, do not add or drop any. Reply with a JSON object "
     "whose keys are exactly the line numbers you were given and whose values are the English. "
     "Nothing else."
@@ -271,7 +323,8 @@ def translate(segs, cfg, k):
     size = max(5, int(cfg["batch"]))
     for a in range(0, len(segs), size):
         part = segs[a:a + size]
-        lines = "\n".join("%d. %s" % (a + i + 1, s["said"]) for i, s in enumerate(part))
+        lines = "\n".join("%d. [max %d words] %s" % (a + i + 1, budget(segs, a + i), s["said"])
+                          for i, s in enumerate(part))
         want = [str(a + i + 1) for i in range(len(part))]
         got = None
         for attempt in (1, 2):
@@ -300,6 +353,17 @@ def translate(segs, cfg, k):
     return segs
 
 
+def trim_silence(src, dest, floor="-45dB"):
+    """Half of a three-word clip came back as silence - measured. Over a lecture
+    that is half a minute of dead air pushing every later line out of step.
+    ffmpeg has no filter for the END of a file, so the tail is trimmed by
+    reversing, trimming the new head, and reversing back."""
+    one = ("silenceremove=start_periods=1:start_silence=0:start_threshold=%s:detection=peak"
+           % floor)
+    run([tool("ffmpeg"), "-y", "-v", "error", "-i", src, "-af",
+         one + ",areverse," + one + ",areverse", dest])
+
+
 def speak(text, cfg, k, dest):
     body = json.dumps({
         "model": cfg["speaker"], "voice": cfg["voice"], "input": text,
@@ -309,7 +373,13 @@ def speak(text, cfg, k, dest):
                         "the words that carry the point. Never sound like a newsreader."}).encode()
     raw = post("https://api.openai.com/v1/audio/speech", body,
                {"Authorization": "Bearer " + k, "Content-Type": "application/json"})
-    open(dest, "wb").write(raw)
+    padded = dest + ".padded.mp3"
+    open(padded, "wb").write(raw)
+    try:
+        trim_silence(padded, dest)
+        os.remove(padded)
+    except Exception:
+        os.replace(padded, dest)      # trimming is an improvement, never a gate
 
 
 # ----------------------------------------------------------------- fitting
@@ -353,12 +423,21 @@ def build_track(segs, cfg, folder, total, k):
                 pcm = decode_pcm(mp3, rate, tempo)
                 want = len(pcm) / 2.0 / rate
 
+            # Two different things can be wrong, and blaming them the same way
+            # turned one bad line into twenty-three. `late` is how far behind the
+            # earlier lines have pushed this one; `own` is whether the line is
+            # simply too long for the moment it belongs to. Only the second is
+            # something to go and fix.
+            late = start - s["start"]
+            own = max(0.25, nxt - s["start"])
             over = want - room
-            if over > 0.05:
-                report.append((i, start, "runs %.1fs past its slot even at %.0f%% speed"
-                               % (over, tempo * 100)))
+            if want > own * float(cfg["max_tempo"]) + 0.05:
+                report.append((i, s["start"], "too long for its %.1fs: needs %.1fs of speech"
+                               % (own, want), True))
+            elif over > 0.05:
+                report.append((i, s["start"], "pushed %.1fs late by the lines before it" % late, False))
             elif tempo > 1.02:
-                report.append((i, start, "sped up to %.0f%% to fit" % (tempo * 100)))
+                report.append((i, s["start"], "sped up to %.0f%% to fit" % (tempo * 100), False))
 
             at = int(start * rate) * 2
             if at + len(pcm) > frames * 2:
@@ -436,6 +515,9 @@ def main():
     else:
         pts = cut_points(audio, total, cfg["chunk_minutes"])
         segs = transcribe(slice_audio(audio, pts, folder), cfg, k)
+        raw_count = len(segs)
+        segs = merge(segs, float(cfg.get("longest_line", 10.0)), float(cfg.get("join_gap", 0.8)))
+        log("     %d fragments joined into %d sentences" % (raw_count, len(segs)))
         json.dump(segs, open(segs_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     if not segs:
         die("Nothing was heard in that recording.")
@@ -468,22 +550,23 @@ def main():
     rep = os.path.join(OUT, name + ".report.txt")
     with open(rep, "w", encoding="utf-8", newline="\n") as f:
         f.write("%s\n%d lines, %.0f minutes\n\n" % (os.path.basename(video), len(segs), total / 60))
-        tight = [r for r in report if "past its slot" in r[2]]
-        f.write("Lines that would not fit even sped up: %d\n" % len(tight))
-        f.write("Lines that had to be sped up at all:   %d\n\n" % (len(report) - len(tight)))
+        tight = [r for r in report if r[3]]
+        f.write("Lines whose English is too long for their moment: %d\n" % len(tight))
+        f.write("Lines merely pushed along, or sped up a little:    %d\n\n"
+                % (len(report) - len(tight)))
         if tight:
             f.write("Shorten these and run it again if they matter:\n")
-            for i, at, why in tight:
+            for i, at, why, _ in tight:
                 f.write("  %s  line %d  %s\n     %s\n" % (clock(at), i + 1, why, segs[i]["en"][:110]))
             f.write("\n")
-        for i, at, why in report:
-            if "past its slot" not in why:
+        for i, at, why, bad in report:
+            if not bad:
                 f.write("  %s  line %d  %s\n" % (clock(at), i + 1, why))
 
     if not cfg.get("keep_work"):
         shutil.rmtree(folder, ignore_errors=True)
 
-    tight = len([r for r in report if "past its slot" in r[2]])
+    tight = len([r for r in report if r[3]])
     log("\n  Done in %.0f minutes.\n" % ((time.time() - began) / 60))
     log("   %s" % out_mp4)
     log("   %s" % fa)

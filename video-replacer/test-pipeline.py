@@ -143,10 +143,40 @@ def main():
 
     # --- the report has to name the line that could not fit ---
     rep = open(os.path.join(work, "out", "lecture.report.txt"), encoding="utf-8").read()
-    check(14, "a line that will not fit even at the cap is reported, not hidden",
-          "line 4" in rep and "past its slot" in rep)
-    check(15, "it was capped rather than made unlistenable",
-          "120%" in rep or "1.2" in rep, [l for l in rep.splitlines() if "line 4" in l])
+    check(14, "the line whose English is too long is named",
+          "line 4" in rep and "too long for its" in rep,
+          [l.strip() for l in rep.splitlines() if "line 4" in l])
+    # the old report blamed every line after a long one as well. A line that is
+    # only late is a victim, and saying so is the difference between one thing
+    # to fix and twenty-three.
+    check(15, "and the lines it merely pushed are counted apart from it",
+          "Lines whose English is too long" in rep and "merely pushed" in rep)
+
+    # --- the fixes that came out of the first real lecture ---
+    frags = [{"start": 0.0, "end": 2.0, "said": "one"},
+             {"start": 2.2, "end": 4.0, "said": "two"},
+             {"start": 9.0, "end": 11.0, "said": "far away"}]
+    m = R.merge(frags, longest=10.0, gap=0.8)
+    check(16, "fragments a breath apart become one sentence",
+          len(m) == 2 and m[0]["said"] == "one two" and m[0]["end"] == 4.0,
+          [x["said"] for x in m])
+    check(17, "a long pause is left as a break", m[1]["said"] == "far away")
+
+    # a two-second moment holds about five spoken words, and the writer is told so
+    b = R.budget([{"start": 10.0, "end": 12.0}, {"start": 12.0, "end": 14.0}], 0)
+    check(18, "each line is given the word budget its moment allows", b == 5, "%d words" % b)
+
+    # half of a three-word clip came back as silence; over a lecture that is
+    # half a minute of dead air pushing everything out of step
+    pad = os.path.join(work, "padded.mp3")
+    cut = os.path.join(work, "cut.mp3")
+    subprocess.run([R.tool("ffmpeg"), "-y", "-v", "error", "-f", "lavfi",
+                    "-i", "sine=frequency=440:duration=1", "-af",
+                    "adelay=1000|1000,apad=pad_dur=1", "-c:a", "libmp3lame", pad], check=True)
+    R.trim_silence(pad, cut)
+    before, after = R.duration(pad), R.duration(cut)
+    check(19, "the silence either side of a spoken line is cut off",
+          before > 2.8 and after < 1.4, "%.2fs -> %.2fs" % (before, after))
 
     print("\n--- the report it wrote ---")
     print(rep.strip()[:700])
