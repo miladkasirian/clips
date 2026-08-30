@@ -1177,7 +1177,10 @@ def yt_fetch(tracks, tok, say=None):
     last = "no tracks"
     for t in tracks:
         sn = t["snippet"]
-        made = "typed by hand" if sn.get("trackKind") != "ASR" else "written by YouTube"
+        # Report what YouTube said, not what it probably meant. "ASR" is its own
+        # automatic transcript; "standard" is a published caption track, which
+        # on your own upload is usually still YouTube's work rather than yours.
+        made = "track kind %s" % (sn.get("trackKind") or "?")
         status, body = yt_get("%s/captions/%s?tfmt=srt" % (YT_API, t["id"]), tok)
         if status == 200 and body.strip():
             segs = parse_srt(body.decode("utf-8", "replace"))

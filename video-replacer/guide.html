@@ -599,7 +599,7 @@ nothing to upload by hand. Behind the scenes:</p>
 <ol class="steps">
   <li><b>The video goes up to your own channel, as Unlisted.</b> A resumable, chunked upload, so half a gigabyte that dies at 90% does not start again from nothing. The log counts it up in tenths.</li>
   <li><b>It waits for YouTube to write the captions</b>, checking every twenty seconds and saying so, up to the limit you set in Settings (20 minutes by default).</li>
-  <li><b>It reads the caption track</b> &mdash; the one a person typed if there is one, otherwise the machine-written one.</li>
+  <li><b>It reads the caption track.</b> If there is more than one it prefers a published track over YouTube's automatic one. The log names the kind YouTube reported (<code>standard</code> or <code>ASR</code>) rather than guessing what it means &mdash; on your own fresh upload a track marked <code>standard</code> is still usually YouTube's work, not yours.</li>
   <li><b>It deletes the upload again.</b> Whether or not the captions worked. That is in a <code>finally</code>, so a failure anywhere above it does not leave a lecture sitting on your channel.</li>
 </ol>
 
