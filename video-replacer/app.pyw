@@ -312,19 +312,40 @@ class App(tk.Tk):
         self.refresh_voices()
 
         # ---------------- glossary ----------------
+        # the button first, anchored to the bottom, so a short screen can never
+        # hide the only way to keep what you just typed
+        ttk.Button(three, text="Save", command=self.save_gloss).pack(side="bottom", anchor="e",
+                                                                    pady=(8, 0))
         ttk.Label(three, text="Words it would otherwise get wrong", style="H.TLabel").pack(anchor="w")
         ttk.Label(three, text="A name you invented has no translation. Say MLAD out loud in Persian "
                               "and it comes back as ملاد, and the writer turns that into \"Milad\" — in "
                               "every line, in every video. One line here fixes it once and for all.\n"
                               "Write them as:   what it sounds like  =  what it must be",
                   style="Dim.TLabel", wraplength=820, justify="left").pack(anchor="w", pady=(2, 10))
-        self.gloss = tk.Text(three, bg="#05080f", fg=TXT, insertbackground=TXT, relief="flat",
-                             font=("Consolas", 11), highlightthickness=1, highlightbackground=LINE)
+        self.gloss = tk.Text(three, height=9, bg="#05080f", fg=TXT, insertbackground=TXT,
+                             relief="flat", font=("Consolas", 11),
+                             highlightthickness=1, highlightbackground=LINE)
         self.gloss.pack(fill="both", expand=True)
         path = os.path.join(HERE, "glossary.txt")
         if os.path.exists(path):
             self.gloss.insert("1.0", open(path, encoding="utf-8-sig").read())
-        ttk.Button(three, text="Save", command=self.save_gloss).pack(anchor="e", pady=8)
+
+        ttk.Label(three, text="Words it says wrong", style="H.TLabel").pack(anchor="w", pady=(16, 2))
+        ttk.Label(three, text="Written right and spoken wrong is a different problem. "
+                              "\u201cChatGPT\u201d belongs on screen exactly as it is, and the voice "
+                              "needs \u201cChat G P T\u201d. This changes only what reaches the voice "
+                              "\u2014 your subtitles and your report are untouched.\n"
+                              "Write them as:   as written  =  as it should sound",
+                  style="Dim.TLabel", wraplength=820, justify="left").pack(anchor="w", pady=(0, 8))
+        self.say = tk.Text(three, height=6, bg="#05080f", fg=TXT, insertbackground=TXT,
+                           relief="flat", font=("Consolas", 11),
+                           highlightthickness=1, highlightbackground=LINE)
+        self.say.pack(fill="both", expand=True)
+        path = os.path.join(HERE, "say.txt")
+        if os.path.exists(path):
+            self.say.insert("1.0", open(path, encoding="utf-8-sig").read())
+        elif not self.cfg.get("said_hello_to_say"):
+            self.say.insert("1.0", "ChatGPT = Chat G P T\nOpenAI = Open A I\nmp4 = M P four\n")
 
         # ---------------- settings ----------------
         self.hintwrap = 820          # this tab has the whole width to itself
@@ -352,6 +373,19 @@ class App(tk.Tk):
         ttk.Checkbutton(f, variable=self.v_proof,
                         text="Tidy up the transcript's spelling before translating"
                         ).pack(side="left")
+
+        f = self._row(four, "What the English is written from",
+                      "The instructions the writer is given for every line. Edit them if you want "
+                      "a different voice on the page \u2014 Reset puts mine back. Saved with "
+                      "everything else when you press Start.")
+        self.v_prompt = tk.Text(four, height=9, bg="#05080f", fg=TXT, insertbackground=TXT,
+                                relief="flat", font=("Consolas", 9), wrap="word",
+                                highlightthickness=1, highlightbackground=LINE)
+        self.v_prompt.pack(fill="x")
+        self.v_prompt.insert("1.0", str(self.cfg.get("writer_prompt") or "").strip()
+                             or R.TRANSLATE)
+        ttk.Button(four, text="Reset to the original wording",
+                   command=self.reset_prompt).pack(anchor="e", pady=(6, 0))
 
         f = self._row(four, "Who writes down what you said",
                       "Both start from the same mp4. The difference is only which one listens "
@@ -502,10 +536,17 @@ class App(tk.Tk):
             "The first time you use it, the model downloads once (about 1.8GB) and it will take a "
             "few minutes." % safe)
 
+    def reset_prompt(self):
+        self.v_prompt.delete("1.0", "end")
+        self.v_prompt.insert("1.0", R.TRANSLATE)
+        self.status.config(text="the writer's instructions are back to mine", foreground=OK)
+
     def save_gloss(self):
         open(os.path.join(HERE, "glossary.txt"), "w", encoding="utf-8", newline="\r\n").write(
             self.gloss.get("1.0", "end-1c"))
-        self.status.config(text="glossary saved", foreground=OK)
+        open(os.path.join(HERE, "say.txt"), "w", encoding="utf-8", newline="\r\n").write(
+            self.say.get("1.0", "end-1c"))
+        self.status.config(text="words saved", foreground=OK)
 
     # ----------------------------------------------------------- setup it does itself
     def _read_key(self):
@@ -714,6 +755,10 @@ class App(tk.Tk):
         c["keep_work"] = bool(self.v_keepwork.get())
         c["language"] = R.language_code(self.v_lang.get())
         c["proofread"] = bool(self.v_proof.get())
+        # blank when it is still mine, so an improvement to it is not frozen out
+        mine = " ".join(self.v_prompt.get("1.0", "end-1c").split())
+        c["writer_prompt"] = "" if mine == " ".join(R.TRANSLATE.split()) else \
+            self.v_prompt.get("1.0", "end-1c").strip()
         c["transcript_from"] = self.v_source.get()
         c["out_dir"] = self.v_out.get().strip()
         c["use_gpu"] = bool(self.v_cuda.get())

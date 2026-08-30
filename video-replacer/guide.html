@@ -114,6 +114,7 @@ footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:v
   <a href="#report">Reading the report</a>
   <a href="#languages">Any language in</a>
   <a href="#glossary">Words it gets wrong</a>
+  <a href="#saying">Words it says wrong</a>
   <div class="grp">Voices</div>
   <a href="#voices">The eleven ready-made</a>
   <a href="#addvoice">Adding a voice of your own</a>
@@ -132,6 +133,7 @@ footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:v
   <a href="#privacy">What leaves the computer</a>
   <div class="grp">Reference</div>
   <a href="#folders">Every folder and file</a>
+  <a href="#prompt">The writer's instructions</a>
   <a href="#settings">Every setting</a>
   <a href="#trouble">When something goes wrong</a>
   <a href="#tests">The tests</a>
@@ -471,6 +473,20 @@ hearing the audio again. That is the <b>Tidy up the transcript's spelling</b> ti
 It is told firmly not to invent: where a passage is genuinely unclear it is left alone, because
 an obviously wrong word is better than a confidently wrong sentence.</p>
 
+<h3 id="saying">Words it says wrong</h3>
+
+<p>Written right and spoken wrong is a different problem from the glossary, and it has its own
+box underneath it on the same tab. <b>ChatGPT</b> belongs on screen exactly as it is; the voice
+needs <b>Chat G P T</b>. Write those as <code>as written = as it should sound</code>:</p>
+
+<pre><code>ChatGPT = Chat G P T
+OpenAI  = Open A I
+mp4     = M P four</code></pre>
+
+<p>This changes <b>only what reaches the voice</b>. Your subtitles, your report and the review
+panel all keep the real spelling &mdash; the substitution is made on a copy of the line, at the
+last moment. It is saved in <code>say.txt</code>.</p>
+
 <h2 id="voices">The eleven ready-made voices</h2>
 
 <figure>
@@ -603,7 +619,36 @@ nothing to upload by hand. Behind the scenes:</p>
   <li><b>It waits for YouTube to write the captions</b>, checking every twenty seconds and saying so, up to the limit you set in Settings (20 minutes by default).</li>
   <li><b>It reads the caption track.</b> If there is more than one it prefers a published track over YouTube's automatic one. The log names the kind YouTube reported (<code>standard</code> or <code>ASR</code>) rather than guessing what it means &mdash; on your own fresh upload a track marked <code>standard</code> is still usually YouTube's work, not yours.</li>
   <li><b>It deletes the upload again.</b> Whether or not the captions worked. That is in a <code>finally</code>, so a failure anywhere above it does not leave a lecture sitting on your channel.</li>
+  <li><b>It rejoins the cues and cuts them at your pauses.</b> Do not skip this one &mdash; it is what stops the finished voice sounding broken. See below.</li>
 </ol>
+
+<div class="warn"><b>YouTube's captions are not sentences, and that has to be undone</b>
+YouTube writes <b>rolling</b> captions: every cue's window overlaps the next by two to five
+seconds so the text stays on screen, and the cues are cut by how much fits on a line, not by where
+you stopped talking. On a real three-minute lecture, <b>all 37 cues overlapped the next one</b>.
+Taken at face value they split sentences in half &mdash; <i>"It creates a name for me. How? When
+I"</i> then <i>"hit start."</i>, or <i>"...converted it to this"</i> then <i>"name, and it creates
+it for me"</i> &mdash; and two half-sentences spoken as two separate utterances is what a halting,
+stuck-sounding voice is made of.</div>
+
+<div class="no"><b>And you cannot fix it by choosing better boundaries</b>
+Two versions of this tried. Then it was measured: of the 36 caption boundaries in that lecture,
+<b>35 were more than a third of a second from any real pause</b>. There is no good break among
+them, because YouTube is not cutting where you stop &mdash; it is cutting where the line fills up.
+<br><br>
+So the boundaries are <b>thrown away</b>. Every word is laid on a timeline, and the words are cut
+at the pauses in <b>your own recording</b>. A line then begins and ends where you began and ended,
+and a line that stops mid-thought stops exactly where you did &mdash; which is how you said it, so
+it is how it should sound. Worst break on that same lecture: <b>3.7 s from a pause before,
+0.7 s after</b>.<br><br>
+A pause must last at least 0.45 s to count, because a hesitation is not a full stop. The sound is
+pulled out locally to find them; it is never uploaded, and on this route it is not sent to OpenAI
+either.</div>
+
+<div class="note"><b>Where the timing inside a cue comes from</b>
+YouTube gives times per cue, not per word, so within a cue the words are spread evenly across the
+span it covers. That is an interpolation and it is out by at most a word &mdash; which is a great
+deal closer than pretending the cue boundaries mean something.</div>
 
 <div class="warn"><b>The one risk, stated plainly</b>
 YouTube locks videos uploaded through an API project it has not audited as <b>private</b>, and
@@ -766,7 +811,7 @@ your own Usage page. If a run ever fails saying a model does not exist, that is 
   <thead><tr><th>#</th><th>Step</th><th>Where it runs</th><th>Why</th></tr></thead>
   <tbody>
     <tr><td>1</td><td>Take the sound out</td><td>ffmpeg, on this computer</td>
-        <td>32 kbps mono &mdash; an hour is about 14 MB. Skipped entirely when YouTube is supplying the words.</td></tr>
+        <td>32 kbps mono &mdash; an hour is about 14 MB. On the YouTube route it is still pulled out, but only to find the pauses, and it is not sent anywhere.</td></tr>
     <tr><td>1b</td><td>Or put the video on your channel</td><td>YouTube, unlisted</td>
         <td>Only on the YouTube route. Uploaded, transcribed, deleted again. <a href="#yt-why">Details and the risk.</a></td></tr>
     <tr><td>2</td><td>Write down what you said</td><td>OpenAI <code>whisper-1</code>, or YouTube</td>
@@ -812,6 +857,18 @@ say one fixed sentence and times it &mdash; a fraction of a cent, once &mdash; a
 answer in <code>config.json</code>. A cloned voice and a ready-made one do not speak at the same
 speed, and every decision about whether a line fits is made from that number.</p>
 
+<div class="good"><b>It is also how a bad take is caught</b>
+A cloned voice does not fail loudly. It <b>rambles</b>: one fourteen-word sentence came back as
+ten seconds of audio &mdash; five of speech and five of noise that sounds like wind &mdash; and
+everything after it treated that as a very slow line and squeezed it. Nothing could tell, because
+a long file is not an error.<br><br>
+The words are the check. Fourteen words at the 2.7 words a second that voice was measured at
+should take <b>5.1 seconds</b>; that take was <b>9.98</b>, nearly twice too long. Any take outside
+0.6&times; to 1.65&times; of what its words should take is <b>said again</b> &mdash; free, for a
+cloned voice &mdash; and if no attempt comes back right, the closest one is used and the log says
+so. A take that is far too <i>short</i> is caught the same way: that is the voice dropping
+words.</div>
+
 <h3 id="drift">Why a line gets cut short</h3>
 
 <p>This is the one place the program deliberately loses something, so it is worth knowing why.</p>
@@ -837,7 +894,7 @@ word than the timing.</p>
 <p>The proper fix for a cut line is always the same: <b>say less in that moment</b>. Shorten it
 in the review panel, and it will not be cut.</p>
 
-<h3>Why sentences, and not fragments</h3>
+<h3 id="pauses">Why sentences, and not fragments</h3>
 
 <p>This is the change that mattered most, so it is worth understanding.</p>
 
@@ -855,6 +912,15 @@ fit</b> to <b>none</b>.</p>
 <code>longest_line</code> (10 seconds) is how long a joined sentence may get.
 <code>join_gap</code> (0.8 seconds) is the pause that counts as a real break rather than a
 breath. They are on the Settings tab under "Rarely worth changing", and the name is accurate.</div>
+
+<div class="warn"><b>YouTube's captions need the opposite treatment</b>
+Whisper's fragments have real gaps between them, so joining on the gap works. YouTube's cues
+<b>overlap on purpose</b> and have no gaps at all, so the same rule joins everything and then
+chops it every ten seconds &mdash; through the middle of sentences. On that route the cues are
+instead rejoined and cut at the pauses detected in your own recording, up to
+<code>youtube_longest</code> (14 seconds). Measured on a real three-minute lecture: 37 cues
+became <b>24 arbitrary chunks</b> the old way and <b>17 lines that end where he stopped
+talking</b> the new way.</div>
 
 <h2 id="privacy">What leaves this computer</h2>
 
@@ -903,6 +969,7 @@ panel, and when you close the app.</p>
     <tr><td><code>config.json</code></td><td>Every setting, written when you press Start with "Remember these settings" ticked. Delete it and the app opens with its defaults; nothing breaks.</td></tr>
     <tr><td><code>key.txt</code></td><td>Your OpenAI key. Written by the Save button. <b>Gitignored.</b></td></tr>
     <tr><td><code>glossary.txt</code></td><td>Your words, one <code>sounds like = must be</code> per line. Edited on the "Words to keep right" tab, saved when you press Start.</td></tr>
+    <tr><td><code>say.txt</code></td><td><a href="#saying">How a word must be spoken</a>, when that differs from how it is written. Same tab, second box.</td></tr>
     <tr><td><code>client_secret.json</code></td><td>The Google desktop client, if you set up the YouTube route. Put there by the Choose button. <b>Gitignored.</b></td></tr>
     <tr><td><code>youtube_token.json</code></td><td>Your YouTube sign-in. Delete it to sign out. <b>Gitignored.</b></td></tr>
     <tr><td><code>input\</code>, <code>output\</code></td><td>Where lectures are expected and where results go. Both are conveniences; you can point anywhere.</td></tr>
@@ -916,6 +983,24 @@ panel, and when you close the app.</p>
     <tr><td><code>guide.html</code></td><td>This page.</td></tr>
   </tbody>
 </table></div>
+
+<h2 id="prompt">The writer's instructions</h2>
+
+<p>The English is written by <code>gpt-4o</code> from a set of instructions, and those
+instructions are on the <b>Settings</b> tab in a box you can edit. They tell it that the input is
+speech and rambles, that the output must sound like a lecturer talking to a room rather than
+written prose, that every number, name and technical term is to be kept exactly, and &mdash; the
+part that does the most work &mdash; that the word count in brackets after each line number is a
+<b>hard constraint</b>, not a preference.</p>
+
+<p>Edit them if you want a different voice on the page: more formal, more terse, British spelling,
+whatever you like. <b>Reset to the original wording</b> puts mine back.</p>
+
+<div class="note"><b>While you have not changed them, nothing is stored</b>
+<code>writer_prompt</code> stays empty in <code>config.json</code> for as long as the box still
+matches the built-in text, so an improvement to the original reaches you instead of being frozen
+out by a copy you never meant to keep. The moment you edit a word, your version is what is saved
+and what is used.</div>
 
 <h2 id="settings">Every setting</h2>
 
@@ -939,6 +1024,7 @@ panel, and when you close the app.</p>
     <tr><td>Your OpenAI key</td><td>&mdash;</td><td>Saved to <code>key.txt</code>.</td></tr>
     <tr><td>ffmpeg</td><td>&mdash;</td><td>Status, and a button that fetches it.</td></tr>
     <tr><td>Tidy up the transcript's spelling</td><td>on</td><td>A pass over what was heard, fixing spelling only, forbidden to invent.</td></tr>
+    <tr><td>What the English is written from</td><td>the built-in wording</td><td><a href="#prompt">Editable, with a Reset button.</a></td></tr>
     <tr><td>Who writes down what you said</td><td>OpenAI Whisper</td><td><a href="#yt-why">The YouTube route.</a> Both start from the same mp4.</td></tr>
     <tr><td>Delete the upload once the words are read</td><td>on</td><td>YouTube route only.</td></tr>
     <tr><td>Give up waiting after</td><td>20 min</td><td>Then it falls back to Whisper.</td></tr>

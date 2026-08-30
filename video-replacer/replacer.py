@@ -94,11 +94,16 @@ DEFAULTS = {
     "max_drift":   0.75,             # a line is never later than this behind its own moment
     "catch_up_tempo": 1.45,          # how hard it may hurry while it is behind
     "squeeze_tempo": 1.60,           # ...and rather than cut a line short at all
+    "writer_prompt": "",             # your own instructions for the English; blank = mine
     "voice_rates":  {},              # words a second, measured once per voice
+    "voice_retries": None,           # extra attempts at a bad take; None = 2 cloned, 1 bought
+    "shortest_take": 0.60,           # ...and what counts as bad: it dropped words
+    "longest_take":  1.65,           # ...or it rambled
     "longest_line": 10.0,            # fragments are joined into sentences up to this long
     "join_gap":     0.8,             # ...as long as the pause between them is under this
     "language":     "",              # "fa", "en"... blank lets it work the language out
     "transcript_from": "here",       # "here" = OpenAI; "youtube" = your own upload
+    "youtube_longest": 14.0,         # YouTube's cues are rejoined and cut at real pauses
     "youtube_wait_minutes": 20,      # how long to wait for YouTube to write the captions
     "youtube_delete":  True,         # take the upload down again once we have the words
     "out_dir":         "",           # where results go; blank means output\\ beside the app
@@ -238,16 +243,23 @@ def extract_audio(video, dest):
          "-ar", "16000", "-c:a", "libmp3lame", "-b:a", "32k", dest])
 
 
-def silences(path, floor="-32dB", least=0.45):
-    """Where it goes quiet, so a chunk boundary never lands mid-sentence."""
+def silences(path, floor="-32dB", least=0.45, with_length=False):
+    """Where it goes quiet, and for how long.
+
+    The length matters: a hesitation in the middle of a sentence and the pause at
+    the end of one look identical until you measure them."""
     p = subprocess.run([tool("ffmpeg"), "-v", "info", "-i", path, "-af",
                         "silencedetect=noise=%s:d=%s" % (floor, least), "-f", "null", "-"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                        text=True, encoding="utf-8", errors="replace", **_NOWINDOW)
-    marks = []
-    for m in re.finditer(r"silence_start:\s*([\d.]+)", p.stderr or ""):
-        marks.append(float(m.group(1)))
-    return marks
+    marks, at = [], None
+    for m in re.finditer(r"silence_(start|duration):\s*([\d.]+)", p.stderr or ""):
+        if m.group(1) == "start":
+            at = float(m.group(2))
+        elif at is not None:
+            marks.append((at, float(m.group(2))))
+            at = None
+    return marks if with_length else [t for t, _ in marks]
 
 
 def cut_points(path, total, minutes):
@@ -397,6 +409,33 @@ def glossary():
     return pairs
 
 
+def pronounce():
+    """say.txt: how a written word must be SPOKEN.
+
+    Separate from glossary.txt on purpose. The glossary decides what is written -
+    it belongs in the subtitles and in the report. This decides only what reaches
+    the voice: "ChatGPT" is right on the screen and wrong in the mouth, and
+    "Chat G P T" is the reverse. Applied to a copy of the line, at the last
+    moment, so nothing you read is ever changed."""
+    path = os.path.join(HERE, "say.txt")
+    pairs = []
+    if os.path.exists(path):
+        for line in open(path, encoding="utf-8-sig"):
+            line = line.split("#")[0].strip()
+            if "=" in line:
+                a, b = line.split("=", 1)
+                if a.strip():
+                    pairs.append((a.strip(), b.strip()))
+    return pairs
+
+
+def as_spoken(text, pairs=None):
+    """The line as the voice should receive it."""
+    for a, b in (pairs if pairs is not None else pronounce()):
+        text = re.sub(r"(?<!\w)%s(?!\w)" % re.escape(a), b, text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def budget(segs, i, cps=WORDS_PER_SECOND):
     """How many words this line has room for, from the gap to the next one."""
     nxt = segs[i + 1]["start"] if i + 1 < len(segs) else segs[i]["end"] + 3.0
@@ -475,6 +514,13 @@ TRANSLATE = (
 )
 
 
+def writer_rules(cfg):
+    """The instructions the English is written from. Yours if you have edited
+    them, mine if you have not - and Reset in Settings puts mine back."""
+    own = str(cfg.get("writer_prompt") or "").strip()
+    return own or TRANSLATE
+
+
 def translate(segs, cfg, k):
     out = [None] * len(segs)
     terms = glossary()
@@ -488,7 +534,7 @@ def translate(segs, cfg, k):
         want = [str(a + i + 1) for i in range(len(part))]
         got = None
         for attempt in (1, 2):
-            rules = TRANSLATE
+            rules = writer_rules(cfg)
             if terms:
                 rules += ("\n\nThese are fixed. Wherever they are said, use exactly the right-hand "
                           "side and nothing else - they are names and terms with no translation:\n"
@@ -552,7 +598,7 @@ def voice_rate(cfg, k, say=None):
         return float(rates[who])
     tmp = os.path.join(tempfile.gettempdir(), "rate-%s.mp3" % re.sub(r"\W+", "_", who))
     try:
-        speak(CALIBRATE, cfg, k, tmp)
+        say_once(CALIBRATE, cfg, k, tmp)      # the check needs the rate this makes
         secs = duration(tmp)
         rate = len(CALIBRATE.split()) / secs if secs > 0.5 else WORDS_PER_SECOND
     except Exception as e:
@@ -893,13 +939,14 @@ def stop_local():
         _local[0] = None
 
 
-def speak(text, cfg, k, dest):
-    """Whichever voice says it, the silence around it is trimmed. Both of them
-    pad what they produce, and untrimmed padding is a line that is longer than
-    its words - which is a line that runs into the next one for no reason. This
-    used to be done only for the cloned voice, which made the ready-made voices
-    quietly worse at keeping time."""
+def say_once(text, cfg, k, dest):
+    """One attempt. Whichever voice says it, the silence around it is trimmed:
+    both of them pad what they produce, and untrimmed padding is a line that is
+    longer than its words - which is a line that runs into the next one for no
+    reason. This used to be done only for the cloned voice, which made the
+    ready-made voices quietly worse at keeping time."""
     padded = dest + ".padded.mp3"
+    text = as_spoken(text)
     if is_clone(cfg):
         speak_local(text, cfg, padded)
     else:
@@ -909,6 +956,59 @@ def speak(text, cfg, k, dest):
         os.remove(padded)
     except Exception:
         os.replace(padded, dest)
+
+
+def speak(text, cfg, k, dest):
+    """Say it, and check that what came back is the length those words should
+    take. If it is not, say it again.
+
+    A cloned voice does not fail loudly. It rambles: a fourteen-word sentence
+    came back as ten seconds of audio - five of speech and five of noise that
+    sounds like wind - and everything downstream treated that as a very slow
+    line and squeezed it. Nothing in the pipeline could tell, because a long
+    file is not an error.
+
+    The words themselves are the check. The voice's speed was measured before
+    the run, so how long a line SHOULD take is known to within a fraction, and
+    a take that is nearly twice too long has rambled while one that is far too
+    short has dropped something. Both are worth another attempt, and for the
+    cloned voice another attempt is free."""
+    words = len(text.split())
+    if words < 2:
+        return say_once(text, cfg, k, dest)
+    rates = cfg.get("voice_rates") or {}
+    try:
+        rate = float(rates.get(str(cfg.get("voice", "")), 0)) or WORDS_PER_SECOND
+    except Exception:
+        rate = WORDS_PER_SECOND
+    want = words / rate
+    asked = cfg.get("voice_retries")
+    tries = 1 + int(asked if asked not in (None, "") else (2 if is_clone(cfg) else 1))
+    low = float(cfg.get("shortest_take", 0.60))
+    high = float(cfg.get("longest_take", 1.65))
+
+    keep, kept_off = None, None
+    for attempt in range(1, tries + 1):
+        say_once(text, cfg, k, dest)
+        off = duration(dest) / want if want > 0 else 1.0
+        if low <= off <= high:
+            if attempt > 1:
+                log("       (line said again, attempt %d, and it came back right)" % attempt)
+            if keep and os.path.exists(keep):
+                os.remove(keep)
+            return
+        if kept_off is None or abs(off - 1.0) < abs(kept_off - 1.0):
+            keep = dest + ".best.mp3"
+            shutil.copyfile(dest, keep)
+            kept_off = off
+        if attempt < tries:
+            log("       line %s than its words - saying it again"
+                % ("nearly %.1f times longer" % off if off > high else "far shorter"))
+    # nothing came back right: use whichever attempt was closest
+    if keep and os.path.exists(keep):
+        os.replace(keep, dest)
+    log("       (kept the closest of %d attempts, %.0f%% of the expected length)"
+        % (tries, (kept_off or 1.0) * 100))
 
 
 def speak_openai(text, cfg, k, dest):
@@ -1262,7 +1362,86 @@ def parse_srt(text):
         said = re.sub(r"\s+", " ", said)
         if said:
             out.append({"start": secs(m.group(1)), "end": secs(m.group(2)), "said": said})
+    out.sort(key=lambda s: s["start"])
+    # YouTube writes ROLLING captions: every cue's display window overlaps the
+    # next by several seconds so the text stays on screen. The words in each cue
+    # are new, but the end time is when it stops being SHOWN, not when he stopped
+    # speaking. Left as they are, every gap between lines is negative and nothing
+    # downstream that reasons about pauses can work.
+    for i in range(len(out) - 1):
+        out[i]["end"] = min(out[i]["end"], out[i + 1]["start"])
     return out
+
+
+def word_times(cues):
+    """Every word with a time, by spreading each cue's words evenly across the
+    span it covers. Cue-level timing is all YouTube gives; within a cue this is
+    an interpolation, and it is out by at most a word - which is a great deal
+    closer than the alternative of pretending the cue boundaries mean anything."""
+    out = []
+    for c in cues:
+        ws = c["said"].split()
+        if not ws:
+            continue
+        span = max(0.05, c["end"] - c["start"])
+        for n, w in enumerate(ws):
+            out.append((c["start"] + span * n / float(len(ws)), w))
+    return out
+
+
+def resplit(cues, marks, longest=14.0, least=0.45, near=None):
+    """Cut the words into lines where he actually stopped talking.
+
+    MEASURED, and it is the whole reason this function exists in this shape: of
+    36 caption boundaries in a real lecture, **35 were more than a third of a
+    second from any real pause**. YouTube cuts its cues by how much text fits on
+    screen. They are not sentence ends, they are not pauses, and choosing among
+    them - however cleverly - cannot produce a break in the right place. Two
+    versions of this function tried and both failed, which is what "name, and it
+    creates it for me" and "for you, and you can adjust" were: the tail of one
+    sentence and the head of the next, each spoken as its own utterance.
+
+    So the cue boundaries are thrown away. The words are laid on a timeline and
+    cut at the pauses in his own recording; a line then begins and ends where he
+    began and ended, and a line that stops mid-thought stops where he did.
+
+    `marks` may be plain times or (time, length) pairs; with lengths, only a
+    pause of at least `least` counts, because a hesitation is not a full stop.
+    """
+    words = word_times(cues)
+    if not words:
+        return []
+    pauses = sorted(m if isinstance(m, (int, float)) else m[0]
+                    for m in marks
+                    if isinstance(m, (int, float)) or m[1] >= least)
+    times = [t for t, _ in words]
+
+    cut = set()
+    for p in pauses:
+        # the first word that starts after the pause begins
+        lo, hi = 0, len(times)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if times[mid] < p:
+                lo = mid + 1
+            else:
+                hi = mid
+        if 0 < lo < len(words):
+            cut.add(lo)
+
+    last = cues[-1]["end"] if cues else 0.0
+    lines, held, began = [], [], 0
+    for n, (t, w) in enumerate(words):
+        if held and n in cut and t - times[began] >= 0.8:
+            lines.append((times[began], t, " ".join(held)))
+            held, began = [], n
+        elif held and t - times[began] > longest:
+            lines.append((times[began], t, " ".join(held)))
+            held, began = [], n
+        held.append(w)
+    if held:
+        lines.append((times[began], last, " ".join(held)))
+    return [{"start": a, "end": b, "said": txt} for a, b, txt in lines]
 
 
 def yt_upload(path, tok, say=None, chunk=8 << 20):
@@ -1454,7 +1633,7 @@ def convert(video, cfg=None, say=None, ask=None, out_dir=None):
         segs = json.load(open(segs_path, encoding="utf-8"))
         log("       (using what was already transcribed)")
     else:
-        segs = []
+        segs, rolling = [], False
         if from_youtube:
             # Its Persian is better than anything reachable through an API, so it
             # is worth asking. If it says no, that is a fact to state out loud
@@ -1462,17 +1641,28 @@ def convert(video, cfg=None, say=None, ask=None, out_dir=None):
             log("       putting it on your channel so YouTube can transcribe it")
             try:
                 segs = yt_transcript(video, cfg, log)
+                rolling = bool(segs)
             except Exception as e:
                 log("       YouTube could not: %s" % e)
                 log("       so it is being transcribed here instead.")
-            if not segs:
-                sound()
         if not segs:
+            sound()
             pts = cut_points(audio, total, cfg["chunk_minutes"])
             segs = transcribe(slice_audio(audio, pts, folder), cfg, k)
         raw_count = len(segs)
-        segs = merge(segs, float(cfg.get("longest_line", 10.0)), float(cfg.get("join_gap", 0.8)))
-        log("     %d fragments joined into %d sentences" % (raw_count, len(segs)))
+        if rolling:
+            # Captions are cut to fit a screen, not to end a sentence. The
+            # recording knows where he stopped talking; the captions do not.
+            sound()
+            marks = silences(audio, "-30dB", 0.35)
+            segs = resplit(segs, marks, float(cfg.get("youtube_longest", 14.0)))
+            log("       (the caption boundaries are thrown away - see the guide)")
+            log("     %d captions rejoined into %d lines, cut at %d real pauses"
+                % (raw_count, len(segs), len(marks)))
+        else:
+            segs = merge(segs, float(cfg.get("longest_line", 10.0)),
+                         float(cfg.get("join_gap", 0.8)))
+            log("     %d fragments joined into %d sentences" % (raw_count, len(segs)))
         if cfg.get("proofread", True):
             segs, fixed = proofread(segs, cfg, k)
             log("     %d line%s tidied up" % (fixed, "" if fixed == 1 else "s"))

@@ -20,6 +20,7 @@ import replacer as R
 REAL_CONFIG = R.config          # main() stubs it out; the window needs the real one
 REAL_YT = R.yt_transcript      # and so does the check that the upload is deleted
 REAL_FIT, REAL_RATE = R.fit_english, R.voice_rate      # likewise, for the same reason
+REAL_SPEAK = R.speak           # and again. This trap has now been fallen into four times
 
 ok = lambda b: "PASS" if b else "**FAIL**"
 fails = []
@@ -405,7 +406,7 @@ def fitting_checks(work):
                         "-i", "sine=frequency=440:duration=%.3f" % (len(text.split()) / 3.0),
                         "-c:a", "libmp3lame", "-b:a", "64k", dest], check=True)
 
-    was, R.speak = R.speak, fake_speak
+    was, R.say_once = R.say_once, fake_speak
     saved = os.path.join(HERE, "config.json")
     keep = open(saved, encoding="utf-8").read() if os.path.exists(saved) else None
     try:
@@ -413,7 +414,7 @@ def fitting_checks(work):
         first = REAL_RATE(cfg, "k")
         second = REAL_RATE(cfg, "k")
     finally:
-        R.speak = was
+        R.say_once = was
         if keep is None:
             if os.path.exists(saved): os.remove(saved)
         else:
@@ -422,6 +423,153 @@ def fitting_checks(work):
     check(42, "the voice is timed once, then remembered rather than timed again",
           len(spoke) == 1 and abs(first - 3.0) < 0.25 and second == first,
           "%.2f words a second, spoken %d time(s)" % (first, len(spoke)))
+
+
+def caption_checks(work):
+    """YouTube's cues are not sentences, and treating them as if they were is
+    what makes the finished voice sound like it keeps getting stuck."""
+    # exactly the shape YouTube produces: every cue's window overlaps the next
+    rolling = ("1\n00:00:01,240 --> 00:00:07,480\none two three\n\n"
+               "2\n00:00:04,400 --> 00:00:12,040\nfour five six\n\n"
+               "3\n00:00:07,480 --> 00:00:16,960\nseven eight nine\n\n"
+               "4\n00:00:14,440 --> 00:00:21,800\nten eleven\n")
+    cues = R.parse_srt(rolling)
+    ends_before_next = all(cues[i]["end"] <= cues[i + 1]["start"] + 1e-6
+                           for i in range(len(cues) - 1))
+    check(43, "a rolling caption's end is pulled back to where the next one starts",
+          ends_before_next and abs(cues[0]["end"] - 4.4) < 1e-6,
+          [(round(c["start"], 2), round(c["end"], 2)) for c in cues])
+
+    # nothing downstream can find a pause while the gaps are all negative
+    gaps_now = [cues[i + 1]["start"] - cues[i]["end"] for i in range(len(cues) - 1)]
+    check("43b", "so the gaps between lines stop being negative",
+          all(g >= -1e-6 for g in gaps_now), [round(g, 2) for g in gaps_now])
+
+    # the pause is at 9.0s, which is INSIDE cue 3 - nowhere near any boundary.
+    # That is the whole point: the boundaries are not where the pauses are.
+    joined = R.resplit([dict(c) for c in cues], [(9.0, 0.6)], longest=30.0)
+    check(44, "the words are cut where he stopped, not where the caption ended",
+          len(joined) == 2 and abs(joined[0]["end"] - joined[1]["start"]) < 1e-6
+          and abs(joined[1]["start"] - 9.0) < 0.9
+          and joined[0]["said"].startswith("one two")
+          and joined[1]["said"].endswith("ten eleven"),
+          [(round(j["start"], 2), j["said"]) for j in joined])
+
+    check("44b", "and no word is lost or duplicated in the process",
+          " ".join(j["said"] for j in joined)
+          == " ".join(c["said"] for c in cues),
+          " ".join(j["said"] for j in joined))
+
+    every = R.resplit([dict(c) for c in cues], [], longest=6.0)
+    # a line can only be cut at a word, so it may run over by at most the gap to
+    # the next one - and the last line runs to the end of the recording
+    times = [t for t, _ in R.word_times(cues)]
+    gap = max(times[i + 1] - times[i] for i in range(len(times) - 1))
+    spans = [j["end"] - j["start"] for j in every[:-1]]
+    check(45, "with no pauses at all it still cuts at the length allowed",
+          all(v <= 6.0 + gap + 0.01 for v in spans) and len(every) >= 3,
+          [round(v, 2) for v in spans] + ["limit 6.0 + one %.1fs word gap" % gap])
+
+    check("45b", "a hesitation is not a break",
+          len(R.resplit([dict(c) for c in cues], [(9.0, 0.20)], longest=30.0)) == 1,
+          "short pauses ignored")
+
+
+def take_checks(work):
+    """A cloned voice does not fail loudly - it rambles, and a long file is not
+    an error. The words are the check: how long a line SHOULD take is known."""
+    made = []
+
+    def bad_then_good(text, cfg, k, dest, lengths=[9.98, 5.10]):
+        secs = lengths[min(len(made), len(lengths) - 1)]
+        made.append(secs)
+        subprocess.run([R.tool("ffmpeg"), "-y", "-v", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=440:duration=%.3f" % secs,
+                        "-c:a", "libmp3lame", "-b:a", "64k", dest], check=True)
+
+    # his real numbers: 14 words at the 2.743 words a second his voice was
+    # measured at should be 5.1s. The take that made the wind noise was 9.98s.
+    text = " ".join(["word"] * 14)
+    cfg = dict(R.DEFAULTS, voice="mine:Milad", voice_rates={"mine:Milad": 2.743})
+    dest = os.path.join(work, "take.mp3")
+    was, R.say_once = R.say_once, bad_then_good
+    said = []
+    old_log, R.log = R.log, lambda m: said.append(m)
+    try:
+        REAL_SPEAK(text, cfg, "k", dest)
+        first_len = R.duration(dest)
+    finally:
+        R.say_once, R.log = was, old_log
+
+    check(46, "a take nearly twice too long for its words is said again",
+          len(made) == 2 and abs(first_len - 5.10) < 0.35,
+          "attempts %s, kept %.2fs" % ([round(m, 2) for m in made], first_len))
+    check("46b", "and it says so rather than doing it silently",
+          any("saying it again" in m for m in said), [m.strip()[:44] for m in said])
+
+    # when nothing comes back right, the closest attempt is what is used
+    made2 = []
+
+    def always_bad(text, cfg, k, dest, lengths=[12.0, 9.0, 20.0]):
+        secs = lengths[min(len(made2), len(lengths) - 1)]
+        made2.append(secs)
+        subprocess.run([R.tool("ffmpeg"), "-y", "-v", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=440:duration=%.3f" % secs,
+                        "-c:a", "libmp3lame", "-b:a", "64k", dest], check=True)
+
+    was, R.say_once = R.say_once, always_bad
+    old_log, R.log = R.log, lambda m: None
+    try:
+        REAL_SPEAK(text, cfg, "k", dest)
+        kept = R.duration(dest)
+    finally:
+        R.say_once, R.log = was, old_log
+    check(47, "and when none of them is right, the closest one is kept",
+          len(made2) == 3 and abs(kept - 9.0) < 0.35,
+          "attempts %s, kept %.2fs" % ([round(m, 2) for m in made2], kept))
+
+    # a good take is never said twice
+    made3 = []
+
+    def good(text, cfg, k, dest):
+        made3.append(1)
+        subprocess.run([R.tool("ffmpeg"), "-y", "-v", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=440:duration=5.10",
+                        "-c:a", "libmp3lame", "-b:a", "64k", dest], check=True)
+
+    was, R.say_once = R.say_once, good
+    try:
+        REAL_SPEAK(text, cfg, "k", dest)
+    finally:
+        R.say_once = was
+    check(48, "a good take is spoken once and never paid for twice", len(made3) == 1,
+          "%d attempt(s)" % len(made3))
+
+
+def wording_checks(work):
+    """Two small things he asked for, both worth a check because both are the
+    kind that quietly stop working."""
+    here = os.path.join(HERE, "say.txt")
+    keep = open(here, encoding="utf-8").read() if os.path.exists(here) else None
+    try:
+        io.open(here, "w", encoding="utf-8").write("ChatGPT = Chat G P T\nOpenAI = Open A I\n")
+        spoken = R.as_spoken("Open the ChatGPT page, then OpenAI's, then chatgpt again.")
+    finally:
+        if keep is None:
+            os.remove(here)
+        else:
+            io.open(here, "w", encoding="utf-8").write(keep)
+
+    check(49, "a word can be written one way and spoken another",
+          "Chat G P T" in spoken and "Open A I" in spoken and "ChatGPT" not in spoken,
+          spoken)
+    check("49b", "and only the spoken copy changes - it is a function, not an edit",
+          R.as_spoken("ChatGPT", []) == "ChatGPT", "with no list, nothing happens")
+
+    check(50, "the writer's instructions are mine until you change them",
+          R.writer_rules({}) == R.TRANSLATE
+          and R.writer_rules({"writer_prompt": "   "}) == R.TRANSLATE
+          and R.writer_rules({"writer_prompt": "say it like a pirate"}) == "say it like a pirate")
 
 
 def main():
@@ -624,11 +772,10 @@ def main():
     R.convert(video, say=lambda m: None, ask=lambda segs: segs)
     heard = os.path.join(yt, "lecture", "heard.json")
     voice = os.path.join(yt, "lecture", "voice.mp3")
-    check(28, "asking YouTube uses its words, and never touches the audio",
+    check(28, "asking YouTube uses its words, and the audio stays on this computer",
           asked == [video] and os.path.exists(heard)
-          and not os.path.exists(voice)
           and os.path.exists(os.path.join(work, "out3", "lecture.en.mp4")),
-          "audio made=%s" % os.path.exists(voice))
+          "the sound is still pulled out locally, to find the pauses - see 44")
 
     # --- and when YouTube says no, the run carries on rather than stopping ---
     def refuse(vid, cfg=None, say=None):
@@ -653,6 +800,9 @@ def main():
     youtube_checks(work)
     sync_checks(work)
     fitting_checks(work)
+    caption_checks(work)
+    take_checks(work)
+    wording_checks(work)
     print("\n--- the report it wrote ---")
     print(rep.strip()[:700])
     shutil.rmtree(work, ignore_errors=True)

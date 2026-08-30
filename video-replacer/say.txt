@@ -1,0 +1,4 @@
+ChatGPT = Chat G P T
+OpenAI = Open A I
+mp4 = M P four
+
