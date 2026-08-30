@@ -9,7 +9,8 @@
   "join_gap": 0.8,
   "language": "fa",
   "transcript_from": "youtube",
-  "youtube_link": "",
+  "youtube_wait_minutes": 20,
+  "youtube_delete": true,
   "out_dir": "H:\\Sem 6\\Course creator skill\\Course Video Replacer\\output",
   "use_gpu": true,
   "last_video": "H:/Sem 6/Course creator skill/Course Video Replacer/input/1.mp4",
@@ -18,5 +19,6 @@
   "chunk_minutes": 12,
   "batch": 40,
   "sample_rate": 24000,
-  "keep_work": false
+  "keep_work": false,
+  "youtube_link": ""
 }

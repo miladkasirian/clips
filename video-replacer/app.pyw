@@ -411,6 +411,8 @@ class App(tk.Tk):
         g = ttk.Frame(adv); g.pack(fill="x", pady=4)
         self.v_adv = {}
         for i, (k, label, hint) in enumerate([
+                ("max_drift", "How far behind a line may ever fall (seconds)", "past this it is cut short rather than pushing everything after it out of step"),
+                ("catch_up_tempo", "How fast a line may be spoken while it is behind", "1.45 = up to 145%. Only ever used to make up lost time"),
                 ("longest_line", "Longest sentence (seconds)", "fragments closer than the gap below are joined up to this"),
                 ("join_gap", "A pause longer than this starts a new line", "seconds"),
                 ("chunk_minutes", "Send to the transcriber in pieces of", "minutes"),

@@ -248,6 +248,91 @@ def youtube_checks(work):
           [deleted, why[:60]])
 
 
+def sync_checks(work):
+    """The thing he actually heard: his voice and the English drifting apart.
+
+    Measured in the finished audio rather than argued about. Each line is spoken
+    at its own loudness, so a tenth of a second of sound can be traced back to
+    the line it came from and the answer is where that line really landed. Run
+    twice: once with the cap that stops lateness accumulating, once with it
+    switched off, which is what the program used to do. A test that only passes
+    is not evidence - this one has to show the bug before it shows the fix."""
+    rate = 24000
+    # each line's text names itself, so the tone made for it can be told apart
+    lines = [{"start": i * 4.0, "end": i * 4.0 + 3.0, "said": "x",
+              "en": "L%02d " % i + " ".join(["word"] * ((8 if i != 3 else 30) - 1))}
+             for i in range(16)]
+    # a different pitch per line: loudness survives encoding badly, pitch does not
+    tone = [300 + i * 60 for i in range(len(lines))]          # 300 .. 1200 Hz
+
+    def speak_at_its_own_pitch(text, cfg, k, dest):
+        n = len(text.split())
+        i = int(text.split()[0][1:])
+        secs = max(0.6, n / 2.6)
+        subprocess.run([R.tool("ffmpeg"), "-y", "-v", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=%d:duration=%.3f" % (tone[i], secs),
+                        "-c:a", "libmp3lame", "-b:a", "64k", dest], check=True)
+
+    def landed(cfg, name):
+        """Where each line's own sound actually starts, by its loudness."""
+        folder = os.path.join(work, name)
+        shutil.rmtree(folder, ignore_errors=True); os.makedirs(folder)
+        was, R.speak = R.speak, speak_at_its_own_pitch
+        try:
+            track, report = R.build_track([dict(s) for s in lines], cfg, folder, 80.0, "k")
+        finally:
+            R.speak = was
+        raw = subprocess.run([R.tool("ffmpeg"), "-v", "error", "-i", track, "-f", "s16le",
+                              "-acodec", "pcm_s16le", "-ac", "1", "-ar", "8000", "-"],
+                             stdout=subprocess.PIPE, check=True).stdout
+        import array
+        a = array.array("h"); a.frombytes(raw[:len(raw) // 2 * 2])
+        step = 800                                   # a tenth of a second at 8 kHz
+        seen = {}
+        for k in range(0, len(a) - step, step):
+            piece = a[k:k + step]
+            if max(abs(x) for x in piece) < 2000:
+                continue
+            crossings = sum(1 for j in range(1, step)
+                            if (piece[j - 1] < 0) != (piece[j] < 0))
+            hz = crossings * 5.0                     # crossings per 0.1s -> Hz
+            i = min(range(len(tone)), key=lambda j: abs(tone[j] - hz))
+            if abs(tone[i] - hz) < 22:               # confidently that line
+                seen.setdefault(i, k / 8000.0)
+        late = {i: seen[i] - lines[i]["start"] for i in seen}
+        return late, report, len(seen)
+
+    loose, _, found_loose = landed(
+        dict(R.DEFAULTS, sample_rate=rate, max_drift=999.0, catch_up_tempo=1.20), "sync_loose")
+    capped, report, found = landed(dict(R.DEFAULTS, sample_rate=rate), "sync_capped")
+
+    worst_loose = max(loose.values()) if loose else 0.0
+    worst = max(capped.values()) if capped else 0.0
+
+    check(35, "without the cap, one long line drags everything after it out of step",
+          found_loose >= 10 and worst_loose > 2.0,
+          "worst %.1fs behind, %d lines traced" % (worst_loose, found_loose))
+    check(36, "with it, no line is ever more than three quarters of a second late",
+          found >= 10 and worst <= 0.85,
+          "worst %.2fs behind, %d lines traced" % (worst, found))
+
+    culprits = [r for r in report if len(r) > 3 and r[3]]
+    check(37, "and the one over-long line is named as the cause, on its own",
+          len(culprits) == 1 and culprits[0][0] == 3,
+          [(r[0], r[2][:38]) for r in report][:4])
+
+    # --- the same lines, whoever wrote them down, land in the same place ---
+    def track_of(name):
+        folder = os.path.join(work, name)
+        shutil.rmtree(folder, ignore_errors=True); os.makedirs(folder)
+        t, _ = R.build_track([dict(s) for s in lines],
+                             dict(R.DEFAULTS, sample_rate=rate), folder, 80.0, "k")
+        return open(t, "rb").read()
+
+    check(38, "the two ways of getting the words place the audio identically",
+          track_of("from_whisper") == track_of("from_youtube"), "byte-for-byte")
+
+
 def main():
     work = os.path.join(HERE, "_test")
     shutil.rmtree(work, ignore_errors=True)
@@ -466,6 +551,7 @@ def main():
     R.OUT = os.path.join(work, "out")
     window_checks(work)
     youtube_checks(work)
+    sync_checks(work)
     print("\n--- the report it wrote ---")
     print(rep.strip()[:700])
     shutil.rmtree(work, ignore_errors=True)

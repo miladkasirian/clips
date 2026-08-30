@@ -28,7 +28,7 @@ picture untouched and the sound in step with it, in that order:
   4. if it STILL will not fit, let it run over and say so in the report, so you
      can shorten that sentence yourself rather than find out in class.
 """
-import base64, hashlib, json, os, re, shutil, subprocess, sys, tempfile, time
+import array, base64, hashlib, json, os, re, shutil, subprocess, sys, tempfile, time
 import urllib.error, urllib.parse, urllib.request
 if os.name == "nt":
     # a frozen app has no console; every helper must run without flashing one up
@@ -90,7 +90,9 @@ DEFAULTS = {
     "speaker":     "gpt-4o-mini-tts",
     "voice":       "onyx",
     "max_tempo":   1.20,             # 1.0 = never speed up. Past ~1.3 it is audible
-    "min_tempo":   0.90,             # slowing a short line down, gently
+    "min_tempo":   0.90,
+    "max_drift":   0.75,             # a line is never later than this behind its own moment
+    "catch_up_tempo": 1.45,          # how hard it may hurry while it is behind
     "longest_line": 10.0,            # fragments are joined into sentences up to this long
     "join_gap":     0.8,             # ...as long as the pause between them is under this
     "language":     "",              # "fa", "en"... blank lets it work the language out
@@ -756,15 +758,21 @@ def stop_local():
 
 
 def speak(text, cfg, k, dest):
+    """Whichever voice says it, the silence around it is trimmed. Both of them
+    pad what they produce, and untrimmed padding is a line that is longer than
+    its words - which is a line that runs into the next one for no reason. This
+    used to be done only for the cloned voice, which made the ready-made voices
+    quietly worse at keeping time."""
+    padded = dest + ".padded.mp3"
     if is_clone(cfg):
-        padded = dest + ".padded.mp3"
         speak_local(text, cfg, padded)
-        try:
-            trim_silence(padded, dest); os.remove(padded)
-        except Exception:
-            os.replace(padded, dest)
-        return
-    return speak_openai(text, cfg, k, dest)
+    else:
+        speak_openai(text, cfg, k, padded)
+    try:
+        trim_silence(padded, dest)
+        os.remove(padded)
+    except Exception:
+        os.replace(padded, dest)
 
 
 def speak_openai(text, cfg, k, dest):
@@ -786,6 +794,19 @@ def speak_openai(text, cfg, k, dest):
 
 
 # ----------------------------------------------------------------- fitting
+def fade_tail(pcm, rate, ms=45):
+    """Cutting raw samples mid-word leaves a click. This takes the last few
+    milliseconds down to nothing so a truncated line simply stops."""
+    n = min(int(rate * ms / 1000.0), len(pcm) // 2)
+    if n <= 0:
+        return pcm
+    a = array.array("h")
+    a.frombytes(pcm[len(pcm) - n * 2:])
+    for j in range(n):
+        a[j] = int(a[j] * (1.0 - (j + 1) / float(n)))
+    return pcm[:len(pcm) - n * 2] + a.tobytes()
+
+
 def build_track(segs, cfg, folder, total, k):
     """Lay every spoken line onto one silent track at the moment it belongs to.
 
@@ -799,6 +820,15 @@ def build_track(segs, cfg, folder, total, k):
     with open(raw_path, "wb") as f:
         f.truncate(frames * 2)                   # silence, as zeros
 
+    # How far behind its own moment a line may ever be. Lateness used to be
+    # allowed to accumulate: one sentence whose English did not fit put the next
+    # fifteen lines up to 6.6 seconds behind the picture, and it took 45 seconds
+    # of video to recover. Measured, not guessed. Now a line is never more than
+    # this late, and the cost of an over-long sentence is paid by that sentence
+    # alone instead of by everything after it.
+    drift_cap = float(cfg.get("max_drift", 0.75))
+    catch_up = max(float(cfg["max_tempo"]), float(cfg.get("catch_up_tempo", 1.45)))
+
     report, cursor = [], 0.0
     with open(raw_path, "r+b") as f:
         for i, s in enumerate(segs):
@@ -810,31 +840,49 @@ def build_track(segs, cfg, folder, total, k):
             pcm = decode_pcm(mp3, rate)
             want = len(pcm) / 2.0 / rate
 
-            # where it may start, and how much room there is before the next line
-            start = max(s["start"], cursor)
+            # where it may start: after the line before it, but never further
+            # behind its own moment than the cap allows
+            start = min(max(s["start"], cursor), s["start"] + drift_cap)
+            late = start - s["start"]
             nxt = segs[i + 1]["start"] if i + 1 < len(segs) else total
             room = max(0.25, nxt - start)
 
             tempo = 1.0
             if want > room:
-                tempo = min(want / room, float(cfg["max_tempo"]))
-            elif want < room * 0.55 and want > 0.6:
+                # while behind, it is allowed to hurry harder than usual - that
+                # is what pays the lateness back instead of passing it on
+                tempo = min(want / room, catch_up if late > 0.05
+                            else float(cfg["max_tempo"]))
+            elif late <= 0.05 and want < room * 0.55 and want > 0.6:
                 # far too short for its slot: slow it very slightly rather than
-                # leaving a hole, but never below the floor
+                # leaving a hole, but never below the floor. Not while behind -
+                # stretching a line when you are late is how you stay late.
                 tempo = max(float(cfg["min_tempo"]), want / (room * 0.8))
             if abs(tempo - 1.0) > 0.01:
                 pcm = decode_pcm(mp3, rate, tempo)
                 want = len(pcm) / 2.0 / rate
+
+            # and it may not run so far past its slot that the next line would
+            # start later than the cap allows. Cut with a short fade rather than
+            # a click, and say so - a truncated sentence is worth knowing about.
+            allowed = (nxt + drift_cap) - start
+            cut = False
+            if want > allowed + 0.02 and i + 1 < len(segs):
+                pcm = fade_tail(pcm[:int(allowed * rate) * 2], rate)
+                want = len(pcm) / 2.0 / rate
+                cut = True
 
             # Two different things can be wrong, and blaming them the same way
             # turned one bad line into twenty-three. `late` is how far behind the
             # earlier lines have pushed this one; `own` is whether the line is
             # simply too long for the moment it belongs to. Only the second is
             # something to go and fix.
-            late = start - s["start"]
             own = max(0.25, nxt - s["start"])
             over = want - room
-            if want > own * float(cfg["max_tempo"]) + 0.05:
+            if cut:
+                report.append((i, s["start"], "too long for its %.1fs and cut short to keep "
+                               "the rest in step" % own, True))
+            elif want > own * float(cfg["max_tempo"]) + 0.05:
                 report.append((i, s["start"], "too long for its %.1fs: needs %.1fs of speech"
                                % (own, want), True))
             elif over > 0.05:

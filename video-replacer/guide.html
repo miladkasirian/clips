@@ -127,6 +127,7 @@ footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:v
   <a href="#cost">What it costs</a>
   <a href="#pipeline">What happens, step by step</a>
   <a href="#fitting">Fitting English to the picture</a>
+  <a href="#drift">Why a line gets cut short</a>
   <a href="#privacy">What leaves the computer</a>
   <div class="grp">Reference</div>
   <a href="#folders">Every folder and file</a>
@@ -794,8 +795,33 @@ and it is solved in four stages, in this order:</p>
   <li><b>Say it at a natural speed.</b> If it fits, done.</li>
   <li><b>Speed it up</b> &mdash; never past the limit on the Convert tab (120% by default). The filter used changes speed <b>without changing pitch</b>, so a hurried line still sounds like the same person rather than a chipmunk.</li>
   <li><b>Borrow the silence that follows it.</b> If you paused after that sentence, the English may run into the pause.</li>
-  <li><b>Let it run over, and name it in the report.</b> Better an honest overrun you can see than a voice sped up to 200%.</li>
+  <li><b>Hurry harder while it is behind</b> &mdash; up to 145%, but only ever to make up time already lost.</li>
+  <li><b>And if it still will not fit, cut that line short</b> rather than letting it push everything after it out of step. It is named in the report as the cause.</li>
 </ol>
+
+<h3 id="drift">Why a line gets cut short</h3>
+
+<p>This is the one place the program deliberately loses something, so it is worth knowing why.</p>
+
+<p>It used to simply push: a line that ran over started the next one late, which started the one
+after that late, and so on. Measured on a deliberately over-long line in a twenty-line test, the
+result was <b>the next fifteen lines up to 6.6 seconds behind the picture</b>, taking 45 seconds
+of video to recover. That is the drift you can hear as the voice slipping out of step with what
+you are pointing at.</p>
+
+<div class="good"><b>Now the cost is paid by the sentence that caused it</b>
+No line is ever more than <b>0.75 seconds</b> behind its own moment. If an over-long sentence
+would push the next one further than that, its tail is cut &mdash; with a short fade, so it stops
+rather than clicks &mdash; and the report names it. The same test now measures a worst case of
+0.8 s, recovering on the very next line.</div>
+
+<p>Both numbers are on the Settings tab under "Rarely worth changing": <b>how far behind a line
+may ever fall</b>, and <b>how fast a line may be spoken while it is behind</b>. Setting the first
+to something enormous restores the old push-everything behaviour, if you would rather have every
+word than the timing.</p>
+
+<p>The proper fix for a cut line is always the same: <b>say less in that moment</b>. Shorten it
+in the review panel, and it will not be cut.</p>
 
 <h3>Why sentences, and not fragments</h3>
 
@@ -905,6 +931,8 @@ panel, and when you close the app.</p>
     <tr><td>Your YouTube sign-in</td><td>&mdash;</td><td>Choose the client file, and sign in.</td></tr>
     <tr><td>The local voice</td><td>not installed</td><td>Install for cloned voices. The status says which device it will really use.</td></tr>
     <tr><td>Use the graphics card</td><td>on</td><td>Tick <b>before</b> pressing Install. <a href="#gpu">Why it matters so much.</a></td></tr>
+    <tr><td>How far behind a line may ever fall</td><td>0.75 s</td><td>Past this it is cut short instead of pushing everything after it. <a href="#drift">Why.</a></td></tr>
+    <tr><td>How fast while behind</td><td>1.45</td><td>Only ever used to make up time already lost.</td></tr>
     <tr><td>Longest sentence</td><td>10.0 s</td><td>How long a joined sentence may get.</td></tr>
     <tr><td>A pause longer than this starts a new line</td><td>0.8 s</td><td>A real break, rather than a breath.</td></tr>
     <tr><td>Send to the transcriber in pieces of</td><td>12 min</td><td>Long lectures are cut at silences, never mid-word.</td></tr>
@@ -945,8 +973,8 @@ panel, and when you close the app.</p>
 
 <h2 id="tests">The tests</h2>
 
-<p><code>python test-pipeline.py</code> &mdash; 32 checks on a made-up 40-second lecture, with the
-three paid steps replaced by fakes. <b>Nothing is sent anywhere and nothing is spent.</b></p>
+<p><code>python test-pipeline.py</code> &mdash; 38 checks on made-up lectures, with every paid
+step replaced by a fake. <b>Nothing is sent anywhere and nothing is spent.</b></p>
 
 <p>It does not check that the code runs. It measures the energy in the finished audio, half a
 second at a time, and asserts that each line's speech lands on the moment of video it belongs to
@@ -957,8 +985,18 @@ cancelling and closing both clear the work folder, that the language you pick re
 transcriber, that YouTube's subtitles become lines with real timings, and that a refusal from
 YouTube falls back instead of stopping.</p>
 
-<p>The last three open the real window and check that every setting survives a restart and that
-no tick or radio goes pale under the pointer. They skip themselves on a machine with no display.</p>
+<p>Three of them open the real window and check that every setting survives a restart and that no
+tick or radio goes pale under the pointer; they skip themselves on a machine with no display. Two
+build the YouTube upload against a stubbed transport and check that the video goes up unlisted,
+whole and in the right byte ranges, and that it is deleted again <i>even when the captions never
+arrive</i>.</p>
+
+<p>And four measure the timing in the finished audio. Each line is spoken at its own pitch, so a
+tenth of a second of sound can be traced back to the line it came from and the answer is where
+that line really landed. The run is done twice &mdash; once with the drift cap and once without
+&mdash; because <b>a test that only passes is not evidence</b>: it has to show the 5.6-second
+drift before it shows the 0.8. The last of the four proves the two ways of getting the words
+place the audio <b>byte for byte identically</b>.</p>
 
 <h2 id="rebuild">Changing the code</h2>
 
