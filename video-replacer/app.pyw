@@ -47,8 +47,8 @@ class App(tk.Tk):
         super().__init__()
         self.title("Course Video Replacer")
         self.configure(bg=BG)
-        self.geometry("1000x820")
-        self.minsize(880, 640)
+        self.geometry("1340x790")
+        self.minsize(1120, 680)
         self.cfg = R.config()
         self.q = queue.Queue()
         self.worker = None
@@ -178,65 +178,85 @@ class App(tk.Tk):
         four = self._scrolling(nb, "  Settings  ")
 
         # ---------------- convert ----------------
-        f = self._row(one, "The video", "The mp4 you recorded. Nothing about it is re-encoded.")
+        # Two columns. Everything you set is on the left; what the run is doing
+        # is on the right, where it is visible the whole time instead of pushed
+        # off the bottom of a tall window.
+        cols = ttk.Frame(one); cols.pack(fill="both", expand=True)
+        left = ttk.Frame(cols, width=660); left.pack(side="left", fill="y")
+        left.pack_propagate(False)
+        ttk.Separator(cols, orient="vertical").pack(side="left", fill="y", padx=16)
+        right = ttk.Frame(cols); right.pack(side="left", fill="both", expand=True)
+
+        f = self._row(left, "Where the words come from")
+        self.v_source = tk.StringVar(
+            value=str(self.cfg.get("transcript_from", "here")).lower())
+        ttk.Radiobutton(f, variable=self.v_source, value="here",
+                        text="Listen to the recording").pack(side="left")
+        ttk.Radiobutton(f, variable=self.v_source, value="youtube",
+                        text="Take them from a YouTube copy").pack(side="left", padx=(18, 0))
+
+        f = self._row(left, "The video")
+        self.vid_hint = ttk.Label(left, text="", style="Dim.TLabel",
+                                  wraplength=640, justify="left")
+        self.vid_hint.pack(anchor="w", pady=(0, 3), before=f)
         self.v_in = tk.StringVar(value=str(self.cfg.get("last_video", "")))
         ttk.Entry(f, textvariable=self.v_in).pack(side="left", fill="x", expand=True)
         ttk.Button(f, text="Choose…", command=self.pick_in).pack(side="left", padx=(8, 0))
 
-        f = self._row(one, "The language you speak in the video",
-                      "It works this out from the audio on its own, and English is what comes "
-                      "out whichever language went in. Name it only if the guess wanders.")
-        self.v_lang = tk.StringVar(value=R.language_label(self.cfg.get("language", "")))
-        ttk.Combobox(f, textvariable=self.v_lang, width=28,
-                     values=[n for n, _ in R.LANGUAGES]).pack(side="left")
-        ttk.Label(f, text="  any other ISO code can be typed here",
-                  style="Dim.TLabel").pack(side="left")
-
-        # only in the way when it is wanted: hidden unless Settings says the
-        # words come from YouTube, so the log box below keeps its room
-        self.link_box = ttk.Frame(one)
+        # shown only when the words are coming from YouTube
+        self.link_box = ttk.Frame(left)
         f = self._row(self.link_box, "The YouTube link",
-                      "Upload the video to your own channel as Unlisted first, then paste "
-                      "the link here.")
+                      "The same lecture, uploaded to your own channel as Unlisted.")
         self.v_link = tk.StringVar(value=str(self.cfg.get("youtube_link", "")))
         ttk.Entry(f, textvariable=self.v_link).pack(side="left", fill="x", expand=True)
 
-        self.out_box = ttk.Frame(one); self.out_box.pack(fill="x")
-        f = self._row(self.out_box, "Where the results go")
+        self.lang_box = ttk.Frame(left); self.lang_box.pack(fill="x")
+        f = self._row(self.lang_box, "The language you speak in the video",
+                      "It works this out from the audio on its own, and English is what comes "
+                      "out whichever language went in. Name it only if the guess wanders.")
+        self.v_lang = tk.StringVar(value=R.language_label(self.cfg.get("language", "")))
+        ttk.Combobox(f, textvariable=self.v_lang, width=26,
+                     values=[n for n, _ in R.LANGUAGES]).pack(side="left")
+        ttk.Label(f, text="  or any ISO code", style="Dim.TLabel").pack(side="left")
+
+        f = self._row(left, "Where the results go")
         self.v_out = tk.StringVar(value=str(self.cfg.get("out_dir", "")).strip()
                                   or os.path.join(HERE, "output"))
         ttk.Entry(f, textvariable=self.v_out).pack(side="left", fill="x", expand=True)
         ttk.Button(f, text="Choose…", command=self.pick_out).pack(side="left", padx=(8, 0))
 
-        f = self._row(one, "How much a line may be sped up to fit",
+        f = self._row(left, "How much a line may be sped up to fit",
                       "English is never the same length as what you said. Past about 125% it is audible.")
         self.v_tempo = tk.DoubleVar(value=float(self.cfg.get("max_tempo", 1.20)))
         self.tempo_lbl = ttk.Label(f, text="", style="Dim.TLabel")
-        s = ttk.Scale(f, from_=1.0, to=1.5, variable=self.v_tempo, orient="horizontal",
-                      command=lambda _=None: self.tempo_lbl.config(
-                          text="  %d%%" % round(self.v_tempo.get() * 100)))
-        s.pack(side="left", fill="x", expand=True); self.tempo_lbl.pack(side="left")
+        sc = ttk.Scale(f, from_=1.0, to=1.5, variable=self.v_tempo, orient="horizontal",
+                       command=lambda _=None: self.tempo_lbl.config(
+                           text="  %d%%" % round(self.v_tempo.get() * 100)))
+        sc.pack(side="left", fill="x", expand=True); self.tempo_lbl.pack(side="left")
         self.tempo_lbl.config(text="  %d%%" % round(self.v_tempo.get() * 100))
 
-        f = ttk.Frame(one); f.pack(fill="x", pady=(10, 0))
-        self.v_review = tk.BooleanVar(value=bool(self.cfg.get("review", True)))
-        ttk.Checkbutton(f, variable=self.v_review,
-                        text="Show me every line first, so I can fix a word before it is spoken"
-                        ).pack(anchor="w")
-
-        go = ttk.Frame(one); go.pack(fill="x", pady=(14, 6))
-        self.v_remember = tk.BooleanVar(value=True)
-        ttk.Checkbutton(go, variable=self.v_remember,
-                        text="Remember these settings").pack(side="right", padx=6)
+        # anchored to the bottom of the column: whatever else is on screen, the
+        # button you came here to press is never the thing that falls off it
+        go = ttk.Frame(left); go.pack(side="bottom", fill="x", pady=(14, 2))
         self.btn = ttk.Button(go, text="Start", style="Go.TButton", command=self.start)
         self.btn.pack(side="left")
         self.status = ttk.Label(go, text="", style="Dim.TLabel")
         self.status.pack(side="left", padx=14)
 
-        self.logbox = tk.Text(one, height=10, bg="#05080f", fg="#cfe0ff", insertbackground=TXT,
+        f = ttk.Frame(left); f.pack(side="bottom", fill="x", pady=(12, 0))
+        self.v_review = tk.BooleanVar(value=bool(self.cfg.get("review", True)))
+        ttk.Checkbutton(f, variable=self.v_review,
+                        text="Show me every line first, so I can fix a word before it is spoken"
+                        ).pack(anchor="w")
+        self.v_remember = tk.BooleanVar(value=True)
+        ttk.Checkbutton(f, variable=self.v_remember,
+                        text="Remember these settings").pack(anchor="w", pady=(4, 0))
+
+        ttk.Label(right, text="What it is doing", style="H.TLabel").pack(anchor="w", pady=(0, 6))
+        self.logbox = tk.Text(right, width=44, bg="#05080f", fg="#cfe0ff", insertbackground=TXT,
                               relief="flat", font=("Consolas", 9), wrap="word",
                               highlightthickness=1, highlightbackground=LINE)
-        self.logbox.pack(fill="both", expand=True, pady=(8, 0))
+        self.logbox.pack(fill="both", expand=True)
 
         # ---------------- voice ----------------
         ttk.Label(three if False else two, text="Which voice speaks your lecture",
@@ -301,21 +321,6 @@ class App(tk.Tk):
         ttk.Checkbutton(f, variable=self.v_proof,
                         text="Tidy up the transcript's spelling before translating"
                         ).pack(side="left")
-
-        f = self._row(four, "Where the words come from",
-                      "YouTube's own machine writes better Persian than anything reachable "
-                      "through an API. It can only do it for a video already on your channel, "
-                      "which you upload yourself - this app never uploads anything.")
-        self.v_source = tk.StringVar(
-            value=str(self.cfg.get("transcript_from", "here")).lower())
-        ttk.Radiobutton(f, variable=self.v_source, value="here",
-                        text="Transcribe here  (works on any file, costs about 40\u00a2 an hour)"
-                        ).pack(anchor="w")
-        ttk.Radiobutton(f, variable=self.v_source, value="youtube",
-                        text="Take it from YouTube  (needs the video on your channel and a link "
-                             "on the Convert tab)").pack(anchor="w", pady=(2, 0))
-        ttk.Label(four, text="If YouTube refuses, the run does not stop \u2014 it says so and "
-                             "transcribes here instead.", style="Dim.TLabel").pack(anchor="w")
 
         f = self._row(four, "Your YouTube sign-in",
                       "One desktop client from the Google Cloud console, signed in once. "
@@ -461,11 +466,21 @@ class App(tk.Tk):
         messagebox.showinfo("Saved", "The key is in key.txt beside this app.")
 
     def show_link(self):
-        """The link box belongs on screen only when it is going to be used."""
+        """One of the two inputs at a time. The link box is not there at all
+        unless the words are coming from YouTube - an empty box for something
+        you are not using is a question you should not have been asked.
+
+        The mp4 stays either way, and the hint says why: the finished file is a
+        video, and the picture can only come from the recording. YouTube can
+        give us the words; it cannot give us your footage."""
         if self.v_source.get() == "youtube":
-            self.link_box.pack(fill="x", before=self.out_box)
+            self.link_box.pack(fill="x", before=self.lang_box)
+            self.vid_hint.config(
+                text="Still needed — the picture comes from here. Only the words are "
+                     "taken from YouTube.")
         else:
             self.link_box.pack_forget()
+            self.vid_hint.config(text="The mp4 you recorded. Nothing about it is re-encoded.")
 
     def yt_status(self):
         """Says which of the two steps is still missing, rather than just 'no'."""
@@ -758,7 +773,7 @@ class Review(tk.Toplevel):
         super().__init__(master)
         self.title("Read this before it speaks")
         self.configure(bg=BG)
-        self.geometry("1000x740")
+        self.geometry("860x580")
         self.segs, self.answer, self.boxes = segs, answer, []
         self.protocol("WM_DELETE_WINDOW", self.cancel)
 
@@ -768,7 +783,7 @@ class Review(tk.Toplevel):
         ttk.Label(top, text="Under each line you said is the English that will be spoken over that "
                             "exact moment of the video. Change anything that is wrong — a name it "
                             "did not know, a term it translated. Fixing it here costs nothing.",
-                  style="Dim.TLabel", wraplength=940, justify="left").pack(anchor="w", pady=(3, 0))
+                  style="Dim.TLabel", wraplength=800, justify="left").pack(anchor="w", pady=(3, 0))
 
         outer = ttk.Frame(self); outer.pack(fill="both", expand=True, padx=16, pady=8)
         cv = tk.Canvas(outer, bg=BG, highlightthickness=0)
@@ -788,7 +803,7 @@ class Review(tk.Toplevel):
                 i + 1, R.clock(s["start"])[3:-4], R.clock(s["end"])[3:-4], R.budget(segs, i))
             ttk.Label(card, text=head, style="CardDim.TLabel",
                       font=("Consolas", 9)).pack(anchor="w")
-            fa = tk.Label(card, text=s["said"].strip(), bg=PAN, fg=DIM, wraplength=880,
+            fa = tk.Label(card, text=s["said"].strip(), bg=PAN, fg=DIM, wraplength=740,
                           justify="right", anchor="e", font=("Segoe UI", 10))
             fa.pack(fill="x", pady=(4, 6))
             box = tk.Text(card, height=2, bg="#05080f", fg=TXT, insertbackground=TXT,
