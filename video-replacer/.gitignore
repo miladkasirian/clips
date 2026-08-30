@@ -6,8 +6,11 @@ samples/
 voice/
 ffmpeg/
 .venv/
+_build/
+*.exe
 *.mp4
 *.m4a
 *.wav
 *.zip
 __pycache__/
+voice_worker.py

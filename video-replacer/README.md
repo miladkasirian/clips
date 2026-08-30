@@ -9,37 +9,46 @@ your.mp4  →  your.en.mp4        the video, your voice replaced
              your.report.txt    every line that had to be squeezed
 ```
 
-## Once
+## Use it
 
-Run **Setup.bat**. It gets ffmpeg and makes the `input` and `output` folders.
-Then put your OpenAI key in a file called **key.txt** in this folder, on one
-line. That file is in `.gitignore` and never leaves this computer.
+Double-click **Course Video Replacer.exe**. That is the whole thing — there is
+nothing else to run and nothing to edit by hand.
 
-## Every time
+| Tab | What is in it |
+|---|---|
+| **Convert** | the video, where results go, whether to show you the English first, how much a line may be sped up — then **Start** |
+| **Voice** | every voice you can use. **Hear it** plays a sample. **Add a voice…** makes a new one from any recording |
+| **Words to keep right** | the glossary, for names it would otherwise get wrong |
+| **Settings** | your OpenAI key, ffmpeg, the local voice, and the models |
 
-1. Drag an `.mp4` onto **Replace.bat**.
-2. It stops and opens **`output\<name>.review.txt`** — every line you said, with
-   the English that will be spoken over that exact moment. Fix any `EN:` line and
-   save. **Nothing has been spoken yet, so fixing a word here costs nothing.**
-3. Run **Approve.bat**. It speaks it, fits it, and builds the video.
+**Remember these settings** next to Start writes everything into `config.json`,
+so the app opens the way you left it.
 
-Everything lands in `output\`. Set `"review": false` in config.json to skip the
-middle step, or pass `--go` on the command line.
+The first time: go to **Settings**, paste your OpenAI key, press **Save**. If
+ffmpeg says *missing*, press **Get it** — the app fetches it itself.
 
-### Words it will get wrong
+### The panel before it speaks
 
-A name you invented has no translation. Say *MLAD* out loud in Persian and the
-transcriber writes ملاد, and the writer turns that into "Milad" — in every line,
-for ever. Put it in **glossary.txt** once:
+Partway through, a window opens with one card per line: the moment it covers,
+how many words fit there, what you said, and a box with the English that will be
+spoken over it. Fix anything wrong and press **Approve and make the video**.
 
-```
-ملاد = MLAD
-اسپین = Spin
-```
+Nothing has been spoken when that panel opens, so a name the translator got
+wrong costs nothing to fix there and a whole run to fix afterwards.
 
-Those are handed to the writer as fixed terms it must use exactly. The review
-sheet is for the one-off mistakes; the glossary is for the ones that would keep
-happening.
+### A voice of your own
+
+**Settings → The local voice → Install** (a few gigabytes, all inside `.venv`
+beside the app — nothing else on the computer is touched). Then **Voice → Add a
+voice…**, pick any recording of someone speaking, name it, and it is in the list.
+
+Give it a recording in **English**, not Persian. The model copies the timbre of
+whatever it is given, and giving it the language it has to speak gives it far
+more to work with — compare `_your-cloned-voice.mp3` with
+`_cloned-from-persian.mp3` in `samples\`.
+
+It runs on this computer, so it costs nothing to use and nothing leaves. On the
+processor it is about 2.3× real time.
 
 ## What happens, and where
 

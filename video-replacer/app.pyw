@@ -14,7 +14,10 @@ the pipeline fixes both ways of running it.
 """
 import json, os, queue, subprocess, sys, threading, traceback
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, "frozen", False):
+    HERE = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import tkinter as tk
@@ -93,6 +96,7 @@ class App(tk.Tk):
         one = ttk.Frame(nb, padding=16); nb.add(one, text="  Convert  ")
         two = ttk.Frame(nb, padding=16); nb.add(two, text="  Voice  ")
         three = ttk.Frame(nb, padding=16); nb.add(three, text="  Words to keep right  ")
+        four = ttk.Frame(nb, padding=16); nb.add(four, text="  Settings  ")
         self.nb = nb
 
         # ---------------- convert ----------------
@@ -174,6 +178,56 @@ class App(tk.Tk):
             self.gloss.insert("1.0", open(path, encoding="utf-8-sig").read())
         ttk.Button(three, text="Save", command=self.save_gloss).pack(anchor="e", pady=8)
 
+        # ---------------- settings ----------------
+        f = self._row(four, "Your OpenAI key",
+                      "Kept in key.txt beside this app, on this computer. It is never sent anywhere "
+                      "but to OpenAI, and never goes into the repository.")
+        self.v_key = tk.StringVar(value=self._read_key())
+        self.keybox = ttk.Entry(f, textvariable=self.v_key, show="\u2022")
+        self.keybox.pack(side="left", fill="x", expand=True)
+        self.v_showkey = tk.BooleanVar(value=False)
+        ttk.Checkbutton(f, variable=self.v_showkey, text="show",
+                        command=lambda: self.keybox.config(
+                            show="" if self.v_showkey.get() else "\u2022")).pack(side="left", padx=8)
+        ttk.Button(f, text="Save", command=self.save_key).pack(side="left")
+
+        f = self._row(four, "ffmpeg", "Does all the work on the video. The app fetches it itself.")
+        self.ff_lbl = ttk.Label(f, text="checking\u2026", style="Dim.TLabel")
+        self.ff_lbl.pack(side="left")
+        ttk.Button(f, text="Get it", command=self.get_ffmpeg).pack(side="left", padx=10)
+
+        f = self._row(four, "The local voice",
+                      "Only needed for a voice of your own. A few gigabytes, installed in .venv "
+                      "beside this app - nothing else on your computer is touched.")
+        self.tts_lbl = ttk.Label(f, text="checking\u2026", style="Dim.TLabel")
+        self.tts_lbl.pack(side="left")
+        ttk.Button(f, text="Install", command=self.install_voice).pack(side="left", padx=10)
+
+        adv = ttk.Frame(four); adv.pack(fill="x", pady=(18, 0))
+        ttk.Label(adv, text="Rarely worth changing", style="H.TLabel").pack(anchor="w")
+        g = ttk.Frame(adv); g.pack(fill="x", pady=4)
+        self.v_adv = {}
+        for i, (k, label, hint) in enumerate([
+                ("longest_line", "Longest sentence (seconds)", "fragments closer than the gap below are joined up to this"),
+                ("join_gap", "A pause longer than this starts a new line", "seconds"),
+                ("chunk_minutes", "Send to the transcriber in pieces of", "minutes"),
+                ("writer", "The model that writes the English", ""),
+                ("transcribe", "The model that listens", "whisper-1 is the only one that returns timestamps"),
+                ("speaker", "The ready-made voice model", "")]):
+            ttk.Label(g, text=label, style="Dim.TLabel").grid(row=i, column=0, sticky="w", pady=2)
+            var = tk.StringVar(value=str(self.cfg.get(k, "")))
+            ttk.Entry(g, textvariable=var, width=42).grid(row=i, column=1, sticky="w", padx=10)
+            if hint:
+                ttk.Label(g, text=hint, style="Dim.TLabel").grid(row=i, column=2, sticky="w")
+            self.v_adv[k] = var
+        self.v_keepwork = tk.BooleanVar(value=bool(self.cfg.get("keep_work", False)))
+        ttk.Checkbutton(adv, variable=self.v_keepwork,
+                        text="Keep the working files, so a second run does not pay twice"
+                        ).pack(anchor="w", pady=(8, 0))
+        ttk.Label(adv, text="Everything on this page is saved when you tick “Remember these "
+                            "settings” and press Start.", style="Dim.TLabel").pack(anchor="w", pady=(10, 0))
+        self.after(200, self.check_tools)
+
     # ----------------------------------------------------------- voices
     def refresh_voices(self):
         self.voicelist.delete(0, "end")
@@ -240,6 +294,103 @@ class App(tk.Tk):
             self.gloss.get("1.0", "end-1c"))
         self.status.config(text="glossary saved", foreground=OK)
 
+    # ----------------------------------------------------------- setup it does itself
+    def _read_key(self):
+        p = os.path.join(HERE, "key.txt")
+        try:
+            return open(p, encoding="utf-8-sig").read().strip()
+        except Exception:
+            return os.environ.get("OPENAI_API_KEY", "")
+
+    def save_key(self):
+        k = self.v_key.get().strip()
+        if k and not k.startswith("sk-"):
+            if not messagebox.askyesno("That does not look like a key",
+                                       "An OpenAI key normally starts with sk-. Save it anyway?"):
+                return
+        open(os.path.join(HERE, "key.txt"), "w", encoding="utf-8").write(k)
+        self.status.config(text="key saved", foreground=OK)
+        messagebox.showinfo("Saved", "The key is in key.txt beside this app.")
+
+    def check_tools(self):
+        try:
+            R.tool("ffmpeg"); self.ff_lbl.config(text="installed", foreground=OK)
+        except SystemExit:
+            self.ff_lbl.config(text="missing - press Get it", foreground=GOLD)
+        except Exception:
+            self.ff_lbl.config(text="missing - press Get it", foreground=GOLD)
+        self.tts_lbl.config(**({"text": "installed", "foreground": OK} if R.venv_python()
+                               else {"text": "not installed", "foreground": DIM}))
+
+    def get_ffmpeg(self):
+        """Fetched by the app. Nothing to run, nothing to unzip by hand."""
+        self.nb.select(0)
+        self._log("\n  getting ffmpeg...\n")
+
+        def job():
+            import urllib.request, zipfile, shutil as sh
+            try:
+                url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+                zp = os.path.join(HERE, "_ffmpeg.zip")
+                self.q.put(("log", "  downloading (about 30MB)...\n"))
+                urllib.request.urlretrieve(url, zp)
+                self.q.put(("log", "  unpacking...\n"))
+                tmp = os.path.join(HERE, "_ff")
+                sh.rmtree(tmp, ignore_errors=True)
+                with zipfile.ZipFile(zp) as z:
+                    z.extractall(tmp)
+                inner = [os.path.join(tmp, d) for d in os.listdir(tmp)
+                         if os.path.isdir(os.path.join(tmp, d))]
+                dest = os.path.join(HERE, "ffmpeg")
+                sh.rmtree(dest, ignore_errors=True)
+                sh.move(inner[0], dest)
+                sh.rmtree(tmp, ignore_errors=True)
+                os.remove(zp)
+                self.q.put(("log", "  ffmpeg is ready.\n"))
+            except Exception as e:
+                self.q.put(("log", "  could not get ffmpeg: %s\n" % e))
+            self.q.put(("tools", None))
+        threading.Thread(target=job, daemon=True).start()
+
+    def install_voice(self):
+        if R.venv_python() and not messagebox.askyesno(
+                "Already installed", "The local voice is already installed. Install it again?"):
+            return
+        self.nb.select(0)
+        self._log("\n  installing the local voice. This is a few gigabytes and takes a while.\n"
+                  "  It all goes in .venv beside this app - nothing else is touched.\n")
+
+        def job():
+            venv = os.path.join(HERE, ".venv")
+            py = sys.executable
+            if getattr(sys, "frozen", False):
+                py = shutil_which_python()
+                if not py:
+                    self.q.put(("log", "\n  Python is not installed on this computer, and the local "
+                                       "voice needs it. Install Python 3.11 from python.org, then "
+                                       "press Install again.\n"))
+                    self.q.put(("tools", None)); return
+            steps = [[py, "-m", "venv", venv]]
+            vpy = os.path.join(venv, "Scripts", "python.exe")
+            steps += [[vpy, "-m", "pip", "install", "--upgrade", "pip"],
+                      # torch 2.8 on purpose: 2.9 wants torchcodec, which needs
+                      # ffmpeg DLLs the static Windows build does not ship
+                      [vpy, "-m", "pip", "install", "torch==2.8.0", "torchaudio==2.8.0"],
+                      [vpy, "-m", "pip", "install", "coqui-tts", "transformers<5"]]
+            for i, cmd in enumerate(steps, 1):
+                self.q.put(("log", "  step %d of %d...\n" % (i, len(steps))))
+                try:
+                    r = subprocess.run(cmd, capture_output=True, text=True, **R._NOWINDOW)
+                    if r.returncode != 0:
+                        self.q.put(("log", "  failed:\n" + (r.stderr or "")[-700:] + "\n"))
+                        break
+                except Exception as e:
+                    self.q.put(("log", "  failed: %s\n" % e)); break
+            else:
+                self.q.put(("log", "\n  the local voice is installed. Go to Voice and add one.\n"))
+            self.q.put(("tools", None))
+        threading.Thread(target=job, daemon=True).start()
+
     # ----------------------------------------------------------- running
     def pick_in(self):
         f = filedialog.askopenfilename(title="Your lecture",
@@ -256,6 +407,15 @@ class App(tk.Tk):
         c["voice"] = self.chosen_voice()
         c["max_tempo"] = round(float(self.v_tempo.get()), 3)
         c["review"] = bool(self.v_review.get())
+        c["keep_work"] = bool(self.v_keepwork.get())
+        for k, var in self.v_adv.items():
+            raw = var.get().strip()
+            if not raw:
+                continue
+            try:
+                c[k] = float(raw) if "." in raw else int(raw)
+            except ValueError:
+                c[k] = raw
         return c
 
     def start(self):
@@ -314,6 +474,8 @@ class App(tk.Tk):
                 kind, payload = self.q.get_nowait()
                 if kind == "log":
                     self._log(payload)
+                elif kind == "tools":
+                    self.check_tools()
                 elif kind == "samples":
                     self.refresh_voices()
                     self.status.config(text="samples ready", foreground=OK)
@@ -410,5 +572,27 @@ class Review(tk.Toplevel):
         self.destroy()
 
 
+def shutil_which_python():
+    """A frozen app has no Python of its own to build a venv with."""
+    import shutil as sh
+    for name in ("python", "python3", "py"):
+        p = sh.which(name)
+        if p:
+            return p
+    for root in (os.environ.get("LOCALAPPDATA", ""), r"C:\\"):
+        for sub in ("Programs\\Python", "Python"):
+            base = os.path.join(root, sub)
+            if os.path.isdir(base):
+                for d in sorted(os.listdir(base), reverse=True):
+                    p = os.path.join(base, d, "python.exe")
+                    if os.path.exists(p):
+                        return p
+    return None
+
+
 if __name__ == "__main__":
-    App().mainloop()
+    app = App()
+    try:
+        app.mainloop()
+    finally:
+        R.stop_local()

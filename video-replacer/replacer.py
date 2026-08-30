@@ -29,8 +29,19 @@ picture untouched and the sound in step with it, in that order:
      can shorten that sentence yourself rather than find out in class.
 """
 import base64, json, os, re, shutil, subprocess, sys, tempfile, time
+if os.name == "nt":
+    # a frozen app has no console; every helper must run without flashing one up
+    _NOWINDOW = {"creationflags": 0x08000000}
+else:
+    _NOWINDOW = {}
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# Frozen into an exe, "where I am" is the exe's folder, not a temp directory
+# PyInstaller unpacked itself into. Everything the user owns - the key, the
+# glossary, the voices, the output - lives beside the exe.
+if getattr(sys, "frozen", False):
+    HERE = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    HERE = os.path.dirname(os.path.abspath(__file__))
 WORK = os.path.join(HERE, "work")
 OUT  = os.path.join(HERE, "output")
 
@@ -125,7 +136,8 @@ def tool(name):
 
 def run(args, capture=True):
     p = subprocess.run(args, stdout=subprocess.PIPE if capture else None,
-                       stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+                       stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                       **_NOWINDOW)
     if p.returncode != 0:
         raise RuntimeError("%s failed:\n%s" % (os.path.basename(args[0]),
                                                (p.stderr or "")[-800:]))
@@ -180,7 +192,7 @@ def silences(path, floor="-32dB", least=0.45):
     p = subprocess.run([tool("ffmpeg"), "-v", "info", "-i", path, "-af",
                         "silencedetect=noise=%s:d=%s" % (floor, least), "-f", "null", "-"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                       text=True, encoding="utf-8", errors="replace")
+                       text=True, encoding="utf-8", errors="replace", **_NOWINDOW)
     marks = []
     for m in re.finditer(r"silence_start:\s*([\d.]+)", p.stderr or ""):
         marks.append(float(m.group(1)))
@@ -233,7 +245,7 @@ def decode_pcm(path, rate, tempo=1.0):
         stages.append("atempo=%.4f" % t)
         args += ["-filter:a", ",".join(stages)]
     args += ["-f", "s16le", "-acodec", "pcm_s16le", "-ac", "1", "-ar", str(rate), "-"]
-    p = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **_NOWINDOW)
     if p.returncode != 0:
         raise RuntimeError("could not decode %s:\n%s" % (path, p.stderr.decode("utf-8", "replace")[-400:]))
     return p.stdout
@@ -503,32 +515,85 @@ def add_voice(source, name):
     return safe, dest
 
 
+def venv_python():
+    """The model needs several gigabytes of PyTorch, which has no business inside
+    an exe. It is installed beside the app instead, and driven from there."""
+    for parts in (("Scripts", "python.exe"), ("bin", "python")):
+        p = os.path.join(HERE, ".venv", *parts)
+        if os.path.exists(p):
+            return p
+    return None
+
+
+WORKER = r'''
+import sys, os
+os.environ.setdefault("COQUI_TOS_AGREED", "1")
+import torch
+from TTS.api import TTS
+ref = sys.argv[1]
+where = "cuda" if torch.cuda.is_available() else "cpu"
+tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(where)
+sys.stdout.write("READY %s\n" % where); sys.stdout.flush()
+for line in sys.stdin:                      # "<destination wav>\t<text>"
+    line = line.rstrip("\n")
+    if not line: continue
+    dest, text = line.split("\t", 1)
+    try:
+        tts.tts_to_file(text=text, speaker_wav=ref, language="en", file_path=dest)
+        sys.stdout.write("OK\n")
+    except Exception as e:
+        sys.stdout.write("ERR %s\n" % str(e).replace("\n", " ")[:200])
+    sys.stdout.flush()
+'''
+
+
 def local_voice(cfg):
-    """Loaded once - it takes about fifteen seconds and would otherwise be paid
-    for on every single line."""
+    """Started once and kept. Loading the model takes about fifteen seconds, and
+    a process per line would pay that on every sentence of the lecture."""
     if _local[0] is None:
-        os.environ.setdefault("COQUI_TOS_AGREED", "1")
-        try:
-            import torch
-            from TTS.api import TTS
-        except ImportError:
-            die("Your own voice needs the local model. Run Setup-voice.bat once.")
-        where = "cuda" if torch.cuda.is_available() else "cpu"
-        log("       loading your voice (%s)%s"
-            % (where, "" if where == "cuda" else " - the processor, so this is slow"))
-        _local[0] = TTS(cfg.get("clone_model", "tts_models/multilingual/multi-dataset/xtts_v2")).to(where)
+        py = venv_python()
+        if not py:
+            die("A voice of your own needs the local model installed. "
+                "Open the app, go to Voice, and press Install.")
+        ref = reference(cfg)
+        if not ref:
+            die("There is no recording to copy. Add a voice in the app first.")
+        script = os.path.join(HERE, "voice_worker.py")
+        open(script, "w", encoding="utf-8").write(WORKER)
+        log("       starting your voice - about fifteen seconds")
+        p = subprocess.Popen([py, script, ref], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                             bufsize=1, **_NOWINDOW)
+        first = p.stdout.readline().strip()
+        if not first.startswith("READY"):
+            raise RuntimeError("the local voice would not start: %s" % (first or "no answer"))
+        where = first.split()[-1]
+        log("       your voice is ready (%s)%s"
+            % (where, "" if where == "cuda" else " - the processor, so this part is slow"))
+        _local[0] = p
     return _local[0]
 
 
 def speak_local(text, cfg, dest):
-    ref = reference(cfg)
-    if not ref:
-        die("There is no recording in voice\\ to copy. Add one in the app first.")
+    p = local_voice(cfg)
     wav = dest + ".wav"
-    local_voice(cfg).tts_to_file(text=text, speaker_wav=ref, language="en", file_path=wav)
+    p.stdin.write("%s\t%s\n" % (wav, re.sub(r"\s+", " ", text).strip()))
+    p.stdin.flush()
+    answer = p.stdout.readline().strip()
+    if not answer.startswith("OK"):
+        raise RuntimeError("your voice could not say that line: %s" % answer[:180])
     run([tool("ffmpeg"), "-y", "-v", "error", "-i", wav, "-c:a", "libmp3lame", "-b:a", "128k", dest])
     try: os.remove(wav)
     except Exception: pass
+
+
+def stop_local():
+    if _local[0] is not None:
+        try:
+            _local[0].stdin.close(); _local[0].terminate()
+        except Exception:
+            pass
+        _local[0] = None
 
 
 def speak(text, cfg, k, dest):

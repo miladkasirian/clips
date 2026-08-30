@@ -92,7 +92,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
   <a href="#what">What this is</a>
   <div class="grp">Everyday</div>
   <a href="#app">The app</a>
-  <a href="#once">Setting it up once</a>
+
   <a href="#run">Running one</a>
   <a href="#review">Checking it before it speaks</a>
   <a href="#glossary">Words it gets wrong</a>
@@ -143,7 +143,8 @@ hour.</div>
 
 <h2 id="app">The app</h2>
 
-<p>Double-click <b>Course Video Replacer.bat</b>. Three tabs, and everything is in them.</p>
+<p>Double-click <b>Course Video Replacer.exe</b>. That is the whole thing &mdash; there is
+nothing else to run, nothing to install first, and nothing to edit by hand.</p>
 
 <table>
   <thead><tr><th>Tab</th><th>What is in it</th></tr></thead>
@@ -155,8 +156,27 @@ hour.</div>
         recording.</td></tr>
     <tr><td><b>Words to keep right</b></td><td>The glossary, edited in place. Save and it applies to
         the next run.</td></tr>
+    <tr><td><b>Settings</b></td><td>Your OpenAI key, ffmpeg, the local voice, and the models. All of
+        it from inside the app.</td></tr>
   </tbody>
 </table>
+
+<h3>The first time</h3>
+
+<ol class="steps">
+  <li>Open <b>Settings</b>, paste your OpenAI key, press <b>Save</b>. It goes into
+      <code>key.txt</code> beside the exe and never leaves this computer.</li>
+  <li>If ffmpeg says <i>missing</i>, press <b>Get it</b>. The app downloads and unpacks it
+      itself.</li>
+  <li>Only if you want a voice of your own: press <b>Install</b> next to <i>The local voice</i>.</li>
+</ol>
+
+<div class="note"><b>Why the voice model is not inside the exe</b>
+The exe is 11MB. The cloned voice needs several gigabytes of PyTorch, which has no business
+inside an executable and would make it slow to start and impossible to update. So the app
+installs it beside itself, into <code>.venv\</code>, and drives it as a separate process that
+loads the model once and stays running. Everything else &mdash; the window, the whole pipeline,
+ffmpeg, the OpenAI calls &mdash; is in the exe.</div>
 
 <p><b>Remember these settings</b>, next to Start, writes what is on screen into
 <code>config.json</code>, so the next time you open the app it is already the way you left it.</p>
@@ -177,34 +197,17 @@ the translator got wrong costs nothing to fix here and a whole run to fix afterw
 <p>Emptying a box does not delete that line &mdash; it keeps what it had. Deleting a piece of your
 lecture by accidentally clearing a field is not a thing that should be possible.</p>
 
-<div class="note"><b>The console way still works</b>
-<code>Replace.bat</code> and <code>Approve.bat</code> do the same job with a text file instead of a
-window. Both call the same pipeline, so a fix to one is a fix to both.</div>
-
-<h2 id="once">Setting it up once</h2>
-
-<ol class="steps">
-  <li>Run <b>Setup.bat</b>. It installs ffmpeg and makes the <code>input</code> and
-      <code>output</code> folders.</li>
-  <li>Make a file called <b>key.txt</b> in this folder with your OpenAI key on one line
-      &mdash; just the key, nothing else. It is in <code>.gitignore</code> and never goes into
-      the repository.</li>
-</ol>
-
-<p>That is all. You never have to run Setup again.</p>
-
-<div class="note"><b>If it says ffmpeg is missing right after installing it</b>
-It will not any more. winget only adds itself to the path of windows opened <em>afterwards</em>,
-so the script also looks in winget's own folder. That one line is the difference between "run
-Setup.bat" and "I just did".</div>
+<div class="note"><b>There is still a console way</b>
+<code>python replacer.py "your.mp4"</code> does the same job with a text file instead of a
+window, and <code>--go</code> skips the stop. Both call the same <code>convert()</code>, so a fix
+to one is a fix to both. You never need it; it is there because a pipeline that can only be run
+from a window cannot be tested.</div>
 
 <h2 id="run">Running one</h2>
 
-<p>Drag an <code>.mp4</code> onto <b>Replace.bat</b>. Or drop the file into <code>input\</code>
-and double-click Replace.bat &mdash; it takes the newest one there.</p>
-
-<p>It prints where it has got to. A two-minute lecture takes about a minute; an hour takes
-roughly twenty.</p>
+<p>Choose the video on the <b>Convert</b> tab and press <b>Start</b>. Progress appears in the box
+underneath. A two-minute lecture takes about a minute; an hour takes roughly twenty &mdash; longer
+with a cloned voice.</p>
 
 <div class="warn"><b>Start small</b>
 The first time, use a two or three minute recording. It costs a few cents and finishes while you
@@ -587,15 +590,17 @@ so it spends nothing and needs no key.</p>
 
 <p class="files">
 <b>Course Video Replacer\</b><br>
-&nbsp;&nbsp;<b>Replace.bat</b> <i>drag an mp4 onto this</i><br>
-&nbsp;&nbsp;<b>Setup.bat</b> <i>run once: gets ffmpeg</i><br>
+&nbsp;&nbsp;<b>Course Video Replacer.exe</b> <i>the app. This is the only thing you open.</i><br>
+&nbsp;&nbsp;<b>app.pyw</b> <i>the window, in source</i><br>
 &nbsp;&nbsp;<b>replacer.py</b> <i>the whole pipeline</i><br>
+&nbsp;&nbsp;<b>build-exe.bat</b> <i>rebuilds the exe after a code change</i><br>
 &nbsp;&nbsp;<b>config.json</b> <i>voice, tempo limits, models</i><br>
 &nbsp;&nbsp;<b>key.txt</b> <i>your OpenAI key. Gitignored. Never committed.</i><br>
 &nbsp;&nbsp;<b>voices.py</b> <i>ten seconds of every voice, into samples\</i><br>
 &nbsp;&nbsp;<b>probe-voice.py</b> <i>asks whether a voice of your own is possible</i><br>
 &nbsp;&nbsp;<b>test-pipeline.py</b> <i>nineteen checks, nothing spent</i><br>
 &nbsp;&nbsp;<b>guide.html</b> <i>this file</i><br>
+&nbsp;&nbsp;<b>.venv\</b> <i>the local voice model, if installed</i><br>
 &nbsp;&nbsp;<b>input\</b> <i>drop lectures here</i><br>
 &nbsp;&nbsp;<b>output\</b> <i>the finished video and subtitles</i><br>
 &nbsp;&nbsp;<b>samples\</b> <i>the voice samples</i><br>
