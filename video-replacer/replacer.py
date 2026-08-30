@@ -96,6 +96,9 @@ DEFAULTS = {
     "language":     "",              # "fa", "en"... blank lets it work the language out
     "transcript_from": "here",       # "here" = OpenAI; "youtube" = your own upload
     "youtube_link":    "",           # the unlisted video, when transcript_from is youtube
+    "out_dir":         "",           # where results go; blank means output\\ beside the app
+    "use_gpu":         True,         # the graphics card, when installing the local voice
+    "last_video":      "",           # so the app opens on the file you were working on
     "proofread":    True,            # repair the transcript's spelling before translating
     "review":       True,            # stop and show the English before speaking it
     "chunk_minutes": 12,             # transcription is sent in pieces this long

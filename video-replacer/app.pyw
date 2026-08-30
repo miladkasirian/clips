@@ -25,6 +25,8 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 
 import replacer as R
 
+INPUT = os.path.join(HERE, "input")      # where a lecture is expected to be
+
 PRESETS = ["onyx", "ash", "echo", "ballad", "verse", "sage",
            "alloy", "fable", "coral", "nova", "shimmer"]
 
@@ -45,7 +47,7 @@ class App(tk.Tk):
         super().__init__()
         self.title("Course Video Replacer")
         self.configure(bg=BG)
-        self.geometry("980x760")
+        self.geometry("1000x820")
         self.minsize(880, 640)
         self.cfg = R.config()
         self.q = queue.Queue()
@@ -53,13 +55,19 @@ class App(tk.Tk):
         self.answer = queue.Queue()      # the review panel's reply to the pipeline
         self._skin()
         self._build()
+        self.v_source.trace_add("write", lambda *_: self.show_link())
+        self.show_link()
         self.protocol("WM_DELETE_WINDOW", self.shut)
-        self.after(80, self._drain)
+        self._tick = self.after(80, self._drain)
 
     def shut(self):
         """Closing means closing. A half-finished transcript of a lecture is not
         something to leave lying about, and the voice model is a live process
         that would otherwise stay running with nothing to do."""
+        try:
+            self.after_cancel(self._tick)     # nothing left ticking into a dead window
+        except Exception:
+            pass
         try:
             R.stop_local()
         except Exception:
@@ -86,17 +94,72 @@ class App(tk.Tk):
         st.configure("H.TLabel", background=BG, foreground=TXT, font=("Segoe UI Semibold", 11))
         st.configure("TButton", font=("Segoe UI", 10), padding=(12, 6))
         st.configure("Go.TButton", font=("Segoe UI Semibold", 12), padding=(20, 11))
-        st.configure("TCheckbutton", background=BG, foreground=TXT, font=("Segoe UI", 10))
-        st.configure("Card.TCheckbutton", background=PAN, foreground=TXT)
         st.configure("TEntry", padding=6)
+        st.configure("Horizontal.TScale", background=BG, troughcolor=PAN,
+                     bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
+        st.map("Horizontal.TScale", background=[("active", BG)])
+        st.configure("Vertical.TScrollbar", background=PAN, troughcolor=BG,
+                     bordercolor=BG, arrowcolor=DIM, relief="flat")
+        st.map("Vertical.TScrollbar", background=[("active", LINE), ("pressed", LINE)])
         st.map("TButton", background=[("active", LINE)])
 
+        # Ticks and radios, on a dark window. clam paints its own pale colour
+        # under the label the moment the mouse is over it or it takes focus, and
+        # pale under white text is text you cannot read. Every state has to be
+        # named, including the dotted focus ring, which clam draws in
+        # focuscolor and defaults to something bright.
+        for w, back in (("TCheckbutton", BG), ("Card.TCheckbutton", PAN),
+                        ("TRadiobutton", BG), ("Card.TRadiobutton", PAN)):
+            st.configure(w, background=back, foreground=TXT, font=("Segoe UI", 10),
+                         focuscolor=back, indicatorcolor=back,
+                         indicatorbackground=PAN, indicatorforeground=TXT)
+            st.map(w,
+                   background=[("active", back), ("selected", back),
+                               ("focus", back), ("pressed", back)],
+                   foreground=[("disabled", DIM), ("active", TXT),
+                               ("selected", TXT), ("focus", TXT)],
+                   indicatorcolor=[("selected", OK), ("pressed", OK),
+                                   ("active", LINE), ("!selected", back)],
+                   indicatorbackground=[("selected", PAN), ("active", LINE),
+                                        ("pressed", LINE), ("!selected", PAN)])
+
     def _row(self, parent, label, hint=""):
-        ttk.Label(parent, text=label, style="H.TLabel").pack(anchor="w", pady=(14, 2))
+        ttk.Label(parent, text=label, style="H.TLabel").pack(anchor="w", pady=(10, 2))
         if hint:
-            ttk.Label(parent, text=hint, style="Dim.TLabel").pack(anchor="w", pady=(0, 4))
+            # wraplength, or a long sentence simply runs off the right edge and
+            # the half you needed is the half you cannot see
+            ttk.Label(parent, text=hint, style="Dim.TLabel",
+                      wraplength=880, justify="left").pack(anchor="w", pady=(0, 3))
         f = ttk.Frame(parent); f.pack(fill="x")
         return f
+
+    def _scrolling(self, nb, title):
+        """A tab taller than the window. Settings has outgrown one screen, and a
+        setting you cannot scroll to is a setting that does not exist."""
+        holder = ttk.Frame(nb); nb.add(holder, text=title)
+        canvas = tk.Canvas(holder, bg=BG, highlightthickness=0, bd=0)
+        bar = ttk.Scrollbar(holder, orient="vertical", command=canvas.yview)
+        inner = ttk.Frame(canvas, padding=16)
+        window = canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=bar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        bar.pack(side="right", fill="y")
+
+        def fit(_=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfigure(window, width=canvas.winfo_width())
+
+        inner.bind("<Configure>", fit)
+        canvas.bind("<Configure>", fit)
+
+        def wheel(e):
+            # only while this tab is the one on top, or the wheel scrolls a
+            # hidden tab while you are looking at another
+            if self.nb.select() == str(holder):
+                canvas.yview_scroll(-1 if e.delta > 0 else 1, "units")
+
+        self.bind_all("<MouseWheel>", wheel, add="+")
+        return inner
 
     # ----------------------------------------------------------- layout
     def _build(self):
@@ -111,12 +174,12 @@ class App(tk.Tk):
         one = ttk.Frame(nb, padding=16); nb.add(one, text="  Convert  ")
         two = ttk.Frame(nb, padding=16); nb.add(two, text="  Voice  ")
         three = ttk.Frame(nb, padding=16); nb.add(three, text="  Words to keep right  ")
-        four = ttk.Frame(nb, padding=16); nb.add(four, text="  Settings  ")
         self.nb = nb
+        four = self._scrolling(nb, "  Settings  ")
 
         # ---------------- convert ----------------
         f = self._row(one, "The video", "The mp4 you recorded. Nothing about it is re-encoded.")
-        self.v_in = tk.StringVar()
+        self.v_in = tk.StringVar(value=str(self.cfg.get("last_video", "")))
         ttk.Entry(f, textvariable=self.v_in).pack(side="left", fill="x", expand=True)
         ttk.Button(f, text="Choose…", command=self.pick_in).pack(side="left", padx=(8, 0))
 
@@ -129,22 +192,21 @@ class App(tk.Tk):
         ttk.Label(f, text="  any other ISO code can be typed here",
                   style="Dim.TLabel").pack(side="left")
 
-        f = self._row(one, "The YouTube link",
-                      "Only used when Settings says the words come from YouTube. Upload the "
-                      "video to your own channel as Unlisted first, then paste the link here.")
+        # only in the way when it is wanted: hidden unless Settings says the
+        # words come from YouTube, so the log box below keeps its room
+        self.link_box = ttk.Frame(one)
+        f = self._row(self.link_box, "The YouTube link",
+                      "Upload the video to your own channel as Unlisted first, then paste "
+                      "the link here.")
         self.v_link = tk.StringVar(value=str(self.cfg.get("youtube_link", "")))
         ttk.Entry(f, textvariable=self.v_link).pack(side="left", fill="x", expand=True)
 
-        f = self._row(one, "Where the results go")
-        self.v_out = tk.StringVar(value=os.path.join(HERE, "output"))
+        self.out_box = ttk.Frame(one); self.out_box.pack(fill="x")
+        f = self._row(self.out_box, "Where the results go")
+        self.v_out = tk.StringVar(value=str(self.cfg.get("out_dir", "")).strip()
+                                  or os.path.join(HERE, "output"))
         ttk.Entry(f, textvariable=self.v_out).pack(side="left", fill="x", expand=True)
         ttk.Button(f, text="Choose…", command=self.pick_out).pack(side="left", padx=(8, 0))
-
-        f = self._row(one, "Before it speaks")
-        self.v_review = tk.BooleanVar(value=bool(self.cfg.get("review", True)))
-        ttk.Checkbutton(f, variable=self.v_review,
-                        text="Show me every line first, so I can fix a word before it is spoken"
-                        ).pack(anchor="w")
 
         f = self._row(one, "How much a line may be sped up to fit",
                       "English is never the same length as what you said. Past about 125% it is audible.")
@@ -156,7 +218,13 @@ class App(tk.Tk):
         s.pack(side="left", fill="x", expand=True); self.tempo_lbl.pack(side="left")
         self.tempo_lbl.config(text="  %d%%" % round(self.v_tempo.get() * 100))
 
-        go = ttk.Frame(one); go.pack(fill="x", pady=(20, 6))
+        f = ttk.Frame(one); f.pack(fill="x", pady=(10, 0))
+        self.v_review = tk.BooleanVar(value=bool(self.cfg.get("review", True)))
+        ttk.Checkbutton(f, variable=self.v_review,
+                        text="Show me every line first, so I can fix a word before it is spoken"
+                        ).pack(anchor="w")
+
+        go = ttk.Frame(one); go.pack(fill="x", pady=(14, 6))
         self.v_remember = tk.BooleanVar(value=True)
         ttk.Checkbutton(go, variable=self.v_remember,
                         text="Remember these settings").pack(side="right", padx=6)
@@ -165,7 +233,7 @@ class App(tk.Tk):
         self.status = ttk.Label(go, text="", style="Dim.TLabel")
         self.status.pack(side="left", padx=14)
 
-        self.logbox = tk.Text(one, height=12, bg="#05080f", fg="#cfe0ff", insertbackground=TXT,
+        self.logbox = tk.Text(one, height=10, bg="#05080f", fg="#cfe0ff", insertbackground=TXT,
                               relief="flat", font=("Consolas", 9), wrap="word",
                               highlightthickness=1, highlightbackground=LINE)
         self.logbox.pack(fill="both", expand=True, pady=(8, 0))
@@ -267,7 +335,7 @@ class App(tk.Tk):
         self.tts_lbl = ttk.Label(f, text="checking\u2026", style="Dim.TLabel")
         self.tts_lbl.pack(side="left")
         ttk.Button(f, text="Install", command=self.install_voice).pack(side="left", padx=10)
-        self.v_cuda = tk.BooleanVar(value=True)
+        self.v_cuda = tk.BooleanVar(value=bool(self.cfg.get("use_gpu", True)))
         ttk.Checkbutton(four, variable=self.v_cuda,
                         text="Use the graphics card (about 3GB more to download, "
                              "several times faster). Untick only if it will not work."
@@ -381,6 +449,13 @@ class App(tk.Tk):
         open(os.path.join(HERE, "key.txt"), "w", encoding="utf-8").write(k)
         self.status.config(text="key saved", foreground=OK)
         messagebox.showinfo("Saved", "The key is in key.txt beside this app.")
+
+    def show_link(self):
+        """The link box belongs on screen only when it is going to be used."""
+        if self.v_source.get() == "youtube":
+            self.link_box.pack(fill="x", before=self.out_box)
+        else:
+            self.link_box.pack_forget()
 
     def yt_status(self):
         """Says which of the two steps is still missing, rather than just 'no'."""
@@ -532,13 +607,22 @@ class App(tk.Tk):
 
     # ----------------------------------------------------------- running
     def pick_in(self):
-        f = filedialog.askopenfilename(title="Your lecture",
+        """Opens in the folder you were last in, and on the first run in the
+        input folder beside the app - which is made if it is not there yet."""
+        start = os.path.dirname(self.v_in.get().strip('" ')) or INPUT
+        if not os.path.isdir(start):
+            start = INPUT
+        os.makedirs(INPUT, exist_ok=True)
+        f = filedialog.askopenfilename(title="Your lecture", initialdir=start,
                                        filetypes=[("Video", "*.mp4 *.mov *.mkv *.avi"),
                                                   ("All files", "*.*")])
         if f: self.v_in.set(f)
 
     def pick_out(self):
-        d = filedialog.askdirectory(title="Where the results go")
+        start = self.v_out.get().strip() or os.path.join(HERE, "output")
+        if not os.path.isdir(start):
+            start = HERE
+        d = filedialog.askdirectory(title="Where the results go", initialdir=start)
         if d: self.v_out.set(d)
 
     def settings(self):
@@ -551,6 +635,9 @@ class App(tk.Tk):
         c["proofread"] = bool(self.v_proof.get())
         c["transcript_from"] = self.v_source.get()
         c["youtube_link"] = self.v_link.get().strip()
+        c["out_dir"] = self.v_out.get().strip()
+        c["use_gpu"] = bool(self.v_cuda.get())
+        c["last_video"] = self.v_in.get().strip('" ')
         for k, var in self.v_adv.items():
             raw = var.get().strip()
             if not raw:
@@ -650,7 +737,7 @@ class App(tk.Tk):
                     self._log("\n  STOPPED: " + payload + "\n")
         except queue.Empty:
             pass
-        self.after(80, self._drain)
+        self._tick = self.after(80, self._drain)
 
 
 class Review(tk.Toplevel):

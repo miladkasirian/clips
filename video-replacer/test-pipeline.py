@@ -17,6 +17,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import replacer as R
 
+REAL_CONFIG = R.config          # main() stubs it out; the window needs the real one
+
 ok = lambda b: "PASS" if b else "**FAIL**"
 fails = []
 
@@ -74,6 +76,88 @@ def energy_windows(path, rate=8000):
         chunk = a[i:i + step]
         out.append(sum(abs(x) for x in chunk) / float(step))
     return out
+
+
+def window_checks(work):
+    """The window itself, opened for real. A setting that does not come back is
+    a setting you have to set again every time, and a colour that goes pale
+    under the pointer is a line you cannot read - both were real bugs."""
+    try:
+        import tkinter as tk
+        from tkinter import ttk
+    except Exception:
+        print("30. (the window checks need tkinter - skipped here)")
+        return
+    try:
+        root = tk.Tk()
+    except Exception as e:
+        print("30. (no display for the window checks - skipped: %s)" % str(e)[:60])
+        return
+    root.destroy()
+
+    import importlib.machinery, importlib.util
+    spec = importlib.util.spec_from_loader("appmod", importlib.machinery.SourceFileLoader(
+        "appmod", os.path.join(HERE, "app.pyw")))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+
+    saved = os.path.join(HERE, "config.json")
+    keep = open(saved, encoding="utf-8").read() if os.path.exists(saved) else None
+    stub, R.config = R.config, REAL_CONFIG    # the window must read the real file
+    try:
+        app = m.App(); app.update()
+        app.v_out.set(os.path.join(work, "elsewhere"))
+        app.v_cuda.set(False)
+        app.v_in.set(os.path.join(work, "a lecture.mp4"))
+        app.v_link.set("https://youtu.be/dQw4w9WgXcQ")
+        app.v_source.set("youtube")
+        app.v_lang.set("Hindi \u0939\u093f\u0928\u094d\u0926\u0940")
+        app.v_proof.set(False)
+        app.v_keepwork.set(True)
+        app.update()
+        shown = bool(app.link_box.winfo_ismapped())
+        app.v_source.set("here"); app.update()
+        hidden = not app.link_box.winfo_ismapped()
+        app.v_source.set("youtube"); app.update()
+
+        wrote = app.settings()
+        json.dump(wrote, open(saved, "w", encoding="utf-8"), indent=2)
+        app.shut()
+
+        again = m.App(); again.update()
+        back = {"out_dir": again.v_out.get(), "use_gpu": again.v_cuda.get(),
+                "last_video": again.v_in.get(), "youtube_link": again.v_link.get(),
+                "transcript_from": again.v_source.get(), "language": again.v_lang.get(),
+                "proofread": again.v_proof.get(), "keep_work": again.v_keepwork.get()}
+        st = ttk.Style(again)
+        pale = []
+        for w, want in (("TCheckbutton", "#0d1118"), ("TRadiobutton", "#0d1118"),
+                        ("Card.TCheckbutton", "#161d2b"), ("Card.TRadiobutton", "#161d2b")):
+            for state in ((), ("active",), ("focus",), ("selected",), ("pressed",),
+                          ("active", "selected"), ("focus", "selected")):
+                for what in ("background", "focuscolor"):
+                    got = str(st.lookup(w, what, state)).lower()
+                    if got != want:
+                        pale.append("%s %s %s=%s" % (w, ",".join(state) or "normal", what, got))
+        again.shut()
+    finally:
+        R.config = stub
+        if keep is None:
+            if os.path.exists(saved):
+                os.remove(saved)
+        else:
+            open(saved, "w", encoding="utf-8").write(keep)
+
+    check(30, "every setting the window offers comes back after a restart",
+          back == {"out_dir": os.path.join(work, "elsewhere"), "use_gpu": False,
+                   "last_video": os.path.join(work, "a lecture.mp4"),
+                   "youtube_link": "https://youtu.be/dQw4w9WgXcQ",
+                   "transcript_from": "youtube",
+                   "language": "Hindi \u0939\u093f\u0928\u094d\u0926\u0940",
+                   "proofread": False, "keep_work": True}, back)
+    check(31, "the YouTube link box appears only when it is going to be used",
+          shown and hidden)
+    check(32, "no tick or radio goes pale under the pointer", not pale, pale[:3])
 
 
 def main():
@@ -292,6 +376,7 @@ def main():
     R.config = lambda: dict(R.DEFAULTS, keep_work=True, proofread=False)
     R.WORK = os.path.join(work, "work")
     R.OUT = os.path.join(work, "out")
+    window_checks(work)
     print("\n--- the report it wrote ---")
     print(rep.strip()[:700])
     shutil.rmtree(work, ignore_errors=True)
