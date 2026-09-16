@@ -1,7 +1,7 @@
 # Family Guy short clips - official @FamilyGuyFOX channel
 # One link per line, in view order (most watched first).
 # Put a # in front of a line to park it without deleting it.
-# 47 live links. 37 more are commented out below.
+# 52 live links. 37 more are commented out below.
 
 https://www.youtube.com/watch?v=i7Lq-_Thvxk | Well, folks, seems like Peter and the gang decided to charge into their plan with a good ol' Leroy Jenkins moment! 🐔 Guess there's never a bad time for a blast from the past, even if it's 13 years late. At least they have chicken, right?
 https://www.youtube.com/watch?v=SoG7VjTqxM4 | Looks like Brian's finally accepted his "husband bod" and embraced the dad jokes. 🍔😂 Quite the transformation for our favorite talking dog!
@@ -78,6 +78,7 @@ https://www.youtube.com/watch?v=6NtbW-N8lFY
 https://www.youtube.com/watch?v=98M9w5H5Ti0
 https://www.youtube.com/watch?v=9vwy8i7rtYo
 https://www.youtube.com/watch?v=CpbotSC-IAc
+https://www.youtube.com/watch?v=DHzjgNoRmjg
 https://www.youtube.com/watch?v=EZ194eCgbvM
 https://www.youtube.com/watch?v=EeGsqLZHxZw
 https://www.youtube.com/watch?v=HB-CyM5yVNw
@@ -90,16 +91,20 @@ https://www.youtube.com/watch?v=TeUQUM6NDFI
 https://www.youtube.com/watch?v=XDlSgtevDIk
 https://www.youtube.com/watch?v=aMT1IHVRLZw
 https://www.youtube.com/watch?v=cb7BCekTlpI
+https://www.youtube.com/watch?v=d0iNno7h2dc
 https://www.youtube.com/watch?v=gUEuuERgDTQ
+https://www.youtube.com/watch?v=gUpB-2KS8gc
 https://www.youtube.com/watch?v=h-Or1c4IDdI
 https://www.youtube.com/watch?v=hSiL06wc1N4
 https://www.youtube.com/watch?v=jGEE3zcAbho
 https://www.youtube.com/watch?v=kJvU9ZAEiUk
+https://www.youtube.com/watch?v=mYAi5aI_NPc
 https://www.youtube.com/watch?v=tQ2QFfDnKu0
 https://www.youtube.com/watch?v=yb6HZcWBFbA
+https://www.youtube.com/watch?v=klbOTcmDm4M
 
 
-# ---- dropped during review on 2026-09-11 (180) - delete the # to bring one back ----
+# ---- dropped during review on 2026-09-16 (180) - delete the # to bring one back ----
 # https://www.youtube.com/watch?v=ceYsWR8pbkE
 # https://www.youtube.com/watch?v=Lun4z5hMSAY
 # https://www.youtube.com/watch?v=5lC8TL-BeOQ
