@@ -251,6 +251,19 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 .pcell.hidden{display:none}
 .pempty{grid-column:1/-1;padding:26px 4px;color:var(--txt-faint);font-size:13.5px;text-align:center}
 
+/* ---- seen list -------------------------------------------------------
+   The same panel serves two lists: the one we spin from and the one we have
+   already watched. A cell carries a tick while it is picked for a move.   */
+.ph{flex-wrap:wrap}
+.ph .chip{flex:none}
+.ph .chip.on{color:var(--txt);border-color:var(--line-2);background:rgba(255,255,255,.09)}
+.ph .chip[disabled]{opacity:.42;cursor:default}
+.ph .chip[hidden]{display:none}
+.pcell.psel{color:#04121a;border-color:transparent;
+  background:linear-gradient(140deg,var(--accent-2),var(--accent));
+  box-shadow:0 10px 22px -12px rgba(77,141,255,.75)}
+.pcell.psel::after{content:"\2713";position:absolute;top:2px;right:6px;font-size:12px;font-weight:800}
+
 #confetti{position:fixed;inset:0;z-index:38;pointer-events:none}
 #toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:60;opacity:0;pointer-events:none;
   max-width:min(560px,92vw);padding:11px 17px;border-radius:12px;font-size:12.5px;line-height:1.55;
@@ -260,6 +273,10 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 
 @media (max-width:560px){
   .stage{gap:18px;padding:16px}
+  /* with the Seen chip added the row no longer fits a phone, and a chip that
+     runs off the edge cannot be pressed - so on a narrow screen it wraps */
+  .topbar{flex-wrap:wrap;justify-content:center;gap:9px}
+  .toolset{flex-wrap:wrap;justify-content:center}
   .brand small{display:none}
   .window{height:102px}
   .cell{height:100px}
@@ -301,6 +318,8 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
     <button class="chip" id="srcChip" type="button" title="Where the clip list came from"><span class="dot"></span><span id="srcTxt">loading</span></button>
     <label class="chip" id="loadChip" title="Load a clips.json from anywhere on this computer">&#128193; Load list<input type="file" id="fileIn" accept=".json,application/json"></label>
     <button class="chip" id="pickChip" type="button" title="Choose a clip yourself">&#9638; Pick one</button>
+    <button class="chip" id="autoChip" type="button" aria-pressed="false" title="When ticked, a clip you have watched moves into the seen list and stops coming up in the spin">&#9744; Hide watched</button>
+    <button class="chip" id="seenChip" type="button" title="The clips already watched">&#9678; Seen <b id="seenN">0</b></button>
     <button class="chip" id="sndChip" type="button" aria-pressed="true" title="Toggle sound">&#9835; Sound</button>
   </div>
 </header>
@@ -324,9 +343,11 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 
 <div id="picker" role="dialog" aria-modal="true" aria-label="Choose a clip">
   <div class="ph">
-    <h2>Pick a clip</h2>
+    <h2 id="pHead">Pick a clip</h2>
     <span class="cnt" id="pCount"></span>
     <input id="pFind" type="search" placeholder="jump to a number…" autocomplete="off" inputmode="numeric">
+    <button class="chip" id="pSelBtn" type="button" title="Tick several clips, then move them">Select</button>
+    <button class="chip" id="pMoveBtn" type="button" hidden>Move</button>
     <div class="sp"></div>
     <button class="iconbtn" id="pClose" type="button" title="Close (Esc)" aria-label="Close">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -834,9 +855,13 @@ var strip=$("strip"),win=$("window"),machine=$("machine"),spinBtn=$("spinBtn"),c
     openBtn=$("openBtn"),againBtn=$("againBtn"),closeBtn=$("closeBtn"),
     srcChip=$("srcChip"),srcTxt=$("srcTxt"),sndChip=$("sndChip"),fileIn=$("fileIn"),toastEl=$("toast"),
     panel=$("panel"),panelBody=$("panelBody"),
-    picker=$("picker"),pgrid=$("pgrid"),pFind=$("pFind"),pCount=$("pCount"),pickChip=$("pickChip"),pClose=$("pClose");
+    picker=$("picker"),pgrid=$("pgrid"),pFind=$("pFind"),pCount=$("pCount"),pickChip=$("pickChip"),pClose=$("pClose"),
+    autoChip=$("autoChip"),seenChip=$("seenChip"),seenN=$("seenN"),pHead=$("pHead"),pSelBtn=$("pSelBtn"),pMoveBtn=$("pMoveBtn");
 
 var CLIPS=[],SOURCE="built-in copy",spinning=false,current=null,loadTimer=null,msgHook=null,deadTimer=null,rerolls=0;
+/* CLIPS is the pool we spin from. ALL is everything the sources gave us, so a
+   clip moved to the seen list is only out of the pool, never lost. */
+var ALL=[],SEEN={},hideSeen=false,pMode="main",pSel={},pList=[],selMode=false;
 var focusHook=null,armTimer=null;   // watches for the click that lands inside the embed
 var ytCmd=null;            // set while a YouTube player is mounted
 var retriedOnce=false;     // one silent rebuild per clip, never a different clip
@@ -1466,6 +1491,8 @@ function closePlayer(){
   player.classList.remove("open");
   clearMedia();
   spinBtn.focus();
+  // a clip we have just watched leaves the pool, but only while the tick is on
+  if(hideSeen) markSeen(current);
 }
 function replay(){
   var v=shell.querySelector("video");
@@ -1502,36 +1529,139 @@ function syncFS(){
    throttled, which then broke playback for the rest of the session. No network
    here at all now: the panel opens instantly and costs nothing.
    ===================================================================== */
+function keyOf(c){ return String(srcOf(c)).toLowerCase(); }
+function seenClips(){ return ALL.filter(function(c){ return SEEN[keyOf(c)]; }); }
+
+/* Remembered between visits, on this browser only. A clip is remembered by its
+   own link, so reloading the list or reordering it cannot move a tick onto the
+   wrong clip. */
+function loadSeen(){
+  try{
+    var raw=localStorage.getItem("rcp.seen");
+    if(raw) JSON.parse(raw).forEach(function(k){ SEEN[k]=true; });
+    hideSeen = localStorage.getItem("rcp.hideSeen")==="1";
+  }catch(e){}
+  refreshChips();
+}
+function saveSeen(){
+  try{
+    var out=[],k; for(k in SEEN) if(SEEN[k]) out.push(k);
+    localStorage.setItem("rcp.seen",JSON.stringify(out));
+    localStorage.setItem("rcp.hideSeen",hideSeen?"1":"0");
+  }catch(e){}
+}
+function seenCount(){ var n=0,k; for(k in SEEN) if(SEEN[k]) n++; return n; }
+function refreshChips(){
+  seenN.textContent=String(seenCount());
+  autoChip.setAttribute("aria-pressed",String(hideSeen));
+  autoChip.innerHTML=(hideSeen?"&#9745;":"&#9744;")+" Hide watched";
+}
+
+/* The pool is rebuilt from ALL every time, never trimmed in place, so turning
+   the tick off brings every clip straight back. */
+function applyPool(){
+  CLIPS = hideSeen ? ALL.filter(function(c){ return !SEEN[keyOf(c)]; }) : ALL.slice();
+  refreshChips();
+  if(!ALL.length) return;
+  if(!CLIPS.length){
+    spinBtn.disabled=true; strip.innerHTML="";
+    counter.textContent="--\u00a0/\u00a0--";
+    toast("Every clip is in the seen list. Open Seen and move some back.",7000);
+    return;
+  }
+  spinBtn.disabled=false;
+  if(!spinning) idle();
+}
+function markSeen(c){
+  if(!c) return;
+  var k=keyOf(c);
+  if(!k || SEEN[k]) return;
+  SEEN[k]=true; saveSeen(); applyPool();
+}
+
+/* =====================================================================
+   MANUAL PICKER  -  numbers only, on purpose.
+   An earlier version showed the first frame of every clip by mounting the real
+   Instagram embed in each tile. With a few hundred clips that made opening the
+   panel painfully slow and hammered Instagram hard enough to get the browser
+   throttled, which then broke playback for the rest of the session. No network
+   here at all now: the panel opens instantly and costs nothing.
+
+   The same panel shows the seen list. Only the array it is built from changes.
+   ===================================================================== */
+function syncMove(){
+  var n=0,k; for(k in pSel) if(pSel[k]) n++;
+  pSelBtn.textContent = selMode ? "Cancel" : "Select";
+  pSelBtn.classList.toggle("on",selMode);
+  pMoveBtn.hidden = !selMode;
+  pMoveBtn.textContent = (pMode==="seen" ? "\u2190 Back to the list" : "\u2192 Move to seen") + (n?" ("+n+")":"");
+  pMoveBtn.disabled = !n;
+}
 function buildPicker(){
+  pList = pMode==="seen" ? seenClips() : CLIPS;
   var frag=document.createDocumentFragment();
-  CLIPS.forEach(function(c,idx){
+  pList.forEach(function(c,idx){
     var num=c.id||idx+1;
     var cell=document.createElement("div");
-    cell.className="pcell"+(sessionBad[(kindOf(c)||{}).id]?" seen":"");
+    cell.className="pcell"+(sessionBad[(kindOf(c)||{}).id]?" seen":"")+(pSel[keyOf(c)]?" psel":"");
     cell.dataset.idx=idx;
     cell.dataset.num=String(num);
     cell.textContent=pad(num);
     cell.title=c.title||("Clip "+num);
-    cell.addEventListener("click",function(){ closePicker(); current=c; openPlayer(c); });
+    cell.addEventListener("click",function(){
+      if(selMode){
+        var k=keyOf(c);
+        if(pSel[k]) delete pSel[k]; else pSel[k]=true;
+        cell.classList.toggle("psel",!!pSel[k]);
+        syncMove();
+        return;
+      }
+      closePicker(); current=c; openPlayer(c);
+    });
     frag.appendChild(cell);
   });
   pgrid.innerHTML="";
   pgrid.appendChild(frag);
   var e=document.createElement("div"); e.className="pempty"; e.id="pEmpty";
-  e.style.display="none"; e.textContent="no clip with that number";
+  if(pList.length){ e.style.display="none"; e.textContent="no clip with that number"; }
+  else{ e.style.display="block"; e.textContent = pMode==="seen" ? "nothing watched yet" : "no clips in the list"; }
   pgrid.appendChild(e);
-  pCount.textContent=CLIPS.length+" clips";
+  pCount.textContent=pList.length+" clips";
 }
-function openPicker(){
-  if(!CLIPS.length){ toast("The list is empty."); return; }
-  buildPicker();
+function openPicker(mode){
+  pMode = (mode==="seen") ? "seen" : "main";
+  if(pMode==="main" && !CLIPS.length){ toast("The list is empty."); return; }
+  selMode=false; pSel={};
+  pHead.textContent = pMode==="seen" ? "Seen clips" : "Pick a clip";
+  buildPicker(); syncMove();
   pFind.value="";
   picker.classList.add("open");
   setTimeout(function(){ pFind.focus(); },70);
 }
-function closePicker(){ picker.classList.remove("open"); pgrid.innerHTML=""; }
-pickChip.addEventListener("click",openPicker);
+function closePicker(){ picker.classList.remove("open"); pgrid.innerHTML=""; selMode=false; pSel={}; }
+pickChip.addEventListener("click",function(){ openPicker("main"); });
+seenChip.addEventListener("click",function(){ openPicker("seen"); });
 pClose.addEventListener("click",closePicker);
+pSelBtn.addEventListener("click",function(){
+  selMode=!selMode; pSel={};
+  Array.prototype.forEach.call(pgrid.querySelectorAll(".pcell.psel"),function(c){ c.classList.remove("psel"); });
+  syncMove();
+});
+pMoveBtn.addEventListener("click",function(){
+  var keys=[],k; for(k in pSel) if(pSel[k]) keys.push(k);
+  if(!keys.length) return;
+  var back = pMode==="seen";
+  keys.forEach(function(key){ if(back) delete SEEN[key]; else SEEN[key]=true; });
+  saveSeen(); selMode=false; pSel={};
+  applyPool();
+  buildPicker(); syncMove(); pFind.value="";
+  toast(keys.length+(back?" moved back to the list.":" moved to the seen list."),3200);
+});
+autoChip.addEventListener("click",function(){
+  hideSeen=!hideSeen; saveSeen(); applyPool();
+  toast(hideSeen ? "A clip you watch now moves to the seen list and leaves the spin."
+                 : "Spinning from the whole list again.",4000);
+});
 pFind.addEventListener("input",function(){
   var q=pFind.value.trim().replace(/^0+/,""), shown=0;
   Array.prototype.forEach.call(pgrid.querySelectorAll(".pcell"),function(cell){
@@ -1540,7 +1670,7 @@ pFind.addEventListener("input",function(){
     if(hit) shown++;
   });
   var e=$("pEmpty"); if(e) e.style.display = shown ? "none" : "block";
-  pCount.textContent = q ? shown+" of "+CLIPS.length : CLIPS.length+" clips";
+  pCount.textContent = q ? shown+" of "+pList.length : pList.length+" clips";
 });
 pFind.addEventListener("keydown",function(e){
   if(e.key!=="Enter") return;
@@ -1678,7 +1808,7 @@ function tagClips(list,s){
 }
 function esc(x){ return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
 function pad(n){
-  var w=Math.max(2,String(CLIPS.length||0).length), out=String(n);
+  var w=Math.max(2,String(ALL.length||CLIPS.length||0).length), out=String(n);
   while(out.length<w) out="0"+out;
   return out;
 }
@@ -1861,7 +1991,8 @@ function renderPanel(label){
 
 /* ---------------- boot ---------------- */
 function start(clips,label){
-  CLIPS=clips.map(function(c,i){ c.id=i+1; if(!c.title){ c.title=""; c.untitled=true; } return c; });
+  ALL=clips.map(function(c,i){ c.id=i+1; if(!c.title){ c.title=""; c.untitled=true; } return c; });
+  CLIPS=ALL.slice();
   SOURCE=label;
   renderPanel(label);
   var bad=STATUS.filter(function(r){ return r.error; }).length;
@@ -1875,7 +2006,7 @@ function start(clips,label){
   spinBtn.disabled=false;
   srcTxt.textContent=CLIPS.length+" clips · "+STATUS.filter(function(r){return r.clips.length;}).length+" sources";
   if(bad) toast(bad+" source(s) failed to load - click the chip at the top right to see why.",8000);
-  idle(); syncFS();
+  applyPool(); syncFS();
 }
 function loadDoc(doc,label){
   applyBranding(doc&&doc.meta);
@@ -1896,6 +2027,7 @@ function boot(){
     .then(function(j){ loadDoc(j, q?url:"clips.json"); })
     .catch(function(e){ loadDoc(inline,"built-in copy"); toast("Could not read "+esc(url)+" ("+e.message+") - running on the built-in copy.",8000); });
 }
+loadSeen();
 boot();
 })();
 </script>
