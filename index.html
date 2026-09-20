@@ -328,7 +328,7 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
     <button class="chip" id="srcChip" type="button" title="Where the clip list came from"><span class="dot"></span><span id="srcTxt">loading</span></button>
     <label class="chip" id="loadChip" title="Load a clips.json from anywhere on this computer">&#128193; Load list<input type="file" id="fileIn" accept=".json,application/json"></label>
     <button class="chip" id="pickChip" type="button" title="Choose a clip yourself">&#9638; Pick one</button>
-    <button class="chip" id="autoChip" type="button" aria-pressed="false" title="When ticked, a clip you have watched moves into the seen list and stops coming up in the spin">&#9744; Hide watched</button>
+    <button class="chip" id="autoChip" type="button" aria-pressed="false" title="When ticked, a clip you have watched goes into the seen list by itself. Whatever is in the seen list is out of the spin and out of Pick one either way.">&#9744; Auto-hide watched</button>
     <button class="chip" id="seenChip" type="button" title="The clips already watched">&#9678; Seen <b id="seenN">0</b></button>
     <button class="chip" id="sndChip" type="button" aria-pressed="true" title="Toggle sound">&#9835; Sound</button>
   </div>
@@ -1590,13 +1590,16 @@ function seenCount(){ var n=0,k; for(k in SEEN) if(SEEN[k]) n++; return n; }
 function refreshChips(){
   seenN.textContent=String(seenCount());
   autoChip.setAttribute("aria-pressed",String(hideSeen));
-  autoChip.innerHTML=(hideSeen?"&#9745;":"&#9744;")+" Hide watched";
+  autoChip.innerHTML=(hideSeen?"&#9745;":"&#9744;")+" Auto-hide watched";
 }
 
-/* The pool is rebuilt from ALL every time, never trimmed in place, so turning
-   the tick off brings every clip straight back. */
+/* Anything in the seen list is out of the main list - out of the spin and out
+   of Pick one - however it got there. That is what moving one back means.
+   The tick decides one thing only: whether watching a clip puts it there by
+   itself. The pool is rebuilt from ALL every time and never trimmed in place,
+   so a clip moved back reappears at once. */
 function applyPool(){
-  CLIPS = hideSeen ? ALL.filter(function(c){ return !SEEN[keyOf(c)]; }) : ALL.slice();
+  CLIPS = ALL.filter(function(c){ return !SEEN[keyOf(c)]; });
   refreshChips();
   if(!ALL.length) return;
   if(!CLIPS.length){
@@ -1705,8 +1708,8 @@ pMoveBtn.addEventListener("click",function(){
 });
 autoChip.addEventListener("click",function(){
   hideSeen=!hideSeen; saveSeen(); applyPool();
-  toast(hideSeen ? "A clip you watch now moves to the seen list and leaves the spin."
-                 : "Spinning from the whole list again.",4000);
+  toast(hideSeen ? "A clip you watch now goes into the seen list by itself."
+                 : "Watching a clip no longer moves it. Whatever is already in the seen list stays out of the spin.",5000);
 });
 pFind.addEventListener("input",function(){
   var q=pFind.value.trim().replace(/^0+/,""), shown=0;
