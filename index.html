@@ -239,11 +239,20 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
   background:rgba(255,255,255,.05);border:1px solid var(--line-2);color:var(--txt)}
 .ph input::placeholder{color:var(--txt-faint);font-family:var(--font)}
 #pgrid{flex:1;overflow:auto;padding:6px 24px 26px;display:grid;gap:9px;
-  grid-template-columns:repeat(auto-fill,minmax(78px,1fr));align-content:start}
-.pcell{position:relative;aspect-ratio:1;border-radius:12px;cursor:pointer;display:grid;place-items:center;
+  grid-template-columns:repeat(auto-fill,minmax(164px,1fr));align-content:start}
+/* A tile carries the number it has here, the number the review page gave it,
+   and the clip's own name. Three lines, so it is a card rather than a square. */
+.pcell{position:relative;min-height:90px;border-radius:12px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 11px;text-align:left;
   background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
   border:1px solid var(--line);font-family:var(--mono);font-size:17px;font-weight:700;
   color:var(--txt-dim);letter-spacing:.5px;transition:.13s ease}
+.pcell .pn{line-height:1.1}
+.pcell .pr{font-size:10.5px;font-weight:600;letter-spacing:.4px;color:var(--txt-faint)}
+.pcell .pt{font-family:var(--font);font-size:11.5px;font-weight:600;letter-spacing:0;line-height:1.33;
+  color:var(--txt-faint);margin-top:1px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pcell:hover .pr,.pcell:hover .pt{color:rgba(4,18,26,.72)}
 .pcell:hover{color:#04121a;border-color:transparent;transform:translateY(-2px);
   background:linear-gradient(140deg,var(--accent),var(--accent-2));
   box-shadow:0 12px 26px -12px rgba(49,224,192,.75)}
@@ -262,7 +271,8 @@ kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);bord
 .pcell.psel{color:#04121a;border-color:transparent;
   background:linear-gradient(140deg,var(--accent-2),var(--accent));
   box-shadow:0 10px 22px -12px rgba(77,141,255,.75)}
-.pcell.psel::after{content:"\2713";position:absolute;top:2px;right:6px;font-size:12px;font-weight:800}
+.pcell.psel::after{content:"\2713";position:absolute;top:6px;right:8px;font-size:12px;font-weight:800}
+.pcell.psel .pr,.pcell.psel .pt{color:rgba(4,18,26,.72)}
 
 #confetti{position:fixed;inset:0;z-index:38;pointer-events:none}
 #toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:60;opacity:0;pointer-events:none;
@@ -1530,6 +1540,32 @@ function syncFS(){
    here at all now: the panel opens instantly and costs nothing.
    ===================================================================== */
 function keyOf(c){ return String(srcOf(c)).toLowerCase(); }
+
+/* titles.json sits beside links.txt and is written by the review page when you
+   publish: one entry per clip, its name and the number the review page knows it
+   by. It is asked for once, and a page that cannot reach it simply shows the
+   number on its own, exactly as before. */
+var TITLES={};
+function loadTitles(){
+  fetch(toUrl("titles.json"),{cache:"no-store"})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      if(!j || typeof j!=="object") return;
+      TITLES=j;
+      if(picker.classList.contains("open")) buildPicker();   // it arrived while the panel was open
+    })
+    .catch(function(){});                                    // opened from disk, or not published yet
+}
+/* Every one of these names ends in the same "| Season 16 Ep. 14 | FAMILY GUY",
+   which would push the half that tells them apart off the tile. */
+function shortTitle(t){
+  var s=String(t||"").split("|")[0].trim();
+  return s || String(t||"").trim();
+}
+function tileOf(c){
+  var k=(kindOf(c)||{}).id, e=k?TITLES[k]:null;
+  return { n:(e&&e.n)||0, t:shortTitle(e&&e.t), full:(e&&e.t)||"" };
+}
 function seenClips(){ return ALL.filter(function(c){ return SEEN[keyOf(c)]; }); }
 
 /* Remembered between visits, on this browser only. A clip is remembered by its
@@ -1606,8 +1642,18 @@ function buildPicker(){
     cell.className="pcell"+(sessionBad[(kindOf(c)||{}).id]?" seen":"")+(pSel[keyOf(c)]?" psel":"");
     cell.dataset.idx=idx;
     cell.dataset.num=String(num);
-    cell.textContent=pad(num);
-    cell.title=c.title||("Clip "+num);
+    var info=tileOf(c);
+    var nEl=document.createElement("div"); nEl.className="pn"; nEl.textContent=pad(num);
+    cell.appendChild(nEl);
+    if(info.n){
+      var rEl=document.createElement("div"); rEl.className="pr";
+      rEl.textContent="review #"+info.n; cell.appendChild(rEl);
+    }
+    if(info.t){
+      var tEl=document.createElement("div"); tEl.className="pt"; tEl.textContent=info.t;
+      cell.appendChild(tEl);
+    }
+    cell.title=info.full || c.title || ("Clip "+num);
     cell.addEventListener("click",function(){
       if(selMode){
         var k=keyOf(c);
@@ -2028,6 +2074,7 @@ function boot(){
     .catch(function(e){ loadDoc(inline,"built-in copy"); toast("Could not read "+esc(url)+" ("+e.message+") - running on the built-in copy.",8000); });
 }
 loadSeen();
+loadTitles();
 boot();
 })();
 </script>

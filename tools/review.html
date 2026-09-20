@@ -2066,6 +2066,87 @@ function pruneBackups(){
     }, Promise.resolve(0)).then(function(n){ return {removed:n, kept:KEEP_BACKUPS}; });
   }, function(){ return null; });
 }
+/* =====================================================================
+   TITLES
+
+   The break-time page shows each clip's name and the number this page knows it
+   by, and neither of those is anywhere in links.txt. So a publish also writes
+   titles.json beside it: one entry per live clip, { t: name, n: this number }.
+
+   It is built up, never rebuilt. A name already in the file is never asked for
+   again, so the first publish costs one small request per clip and every
+   publish after it costs only the new ones. Nothing here can fail the publish -
+   it runs after links.txt is already safely written, exactly like the backup
+   tidy-up, and says so in the same closing line.
+   ===================================================================== */
+function unb64(text){
+  var bin = atob(String(text).replace(/\n/g, "")), a = new Uint8Array(bin.length), i;
+  for(i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(a);
+}
+function liveIds(text){
+  var out = [], seen = {};
+  text.split(/\r?\n/).forEach(function(l){
+    l = l.trim();
+    if(!l || l.charAt(0) === "#") return;
+    var m = IDRE.exec(l);
+    if(!m || seen[m[1]]) return;
+    seen[m[1]] = 1; out.push(m[1]);
+  });
+  return out;
+}
+function askTitle(id){
+  return fetch("https://www.youtube.com/oembed?format=json&url=" +
+               encodeURIComponent("https://www.youtube.com/watch?v=" + id))
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){ return (j && j.title) || ""; })
+    .catch(function(){ return ""; });      // a name we cannot get is left empty, not guessed
+}
+/* Four at a time. One by one is slow over a phone connection and all at once is
+   the kind of burst that gets a browser throttled. */
+function inFours(list, each){
+  var i = 0;
+  function step(){
+    if(i >= list.length) return Promise.resolve();
+    var slice = list.slice(i, i + 4); i += 4;
+    return Promise.all(slice.map(each)).then(step);
+  }
+  return step();
+}
+function writeTitles(text){
+  var ids = liveIds(text), nOf = {};
+  ITEMS.forEach(function(it){ nOf[it.id] = it.n; });
+  return gh("contents/titles.json?ref=" + BRANCH).then(function(r){
+    return r.ok ? r.json() : null;
+  }).then(function(cur){
+    var have = {}, sha = cur && cur.sha;
+    if(cur && cur.content){ try{ have = JSON.parse(unb64(cur.content)) || {}; }catch(e){ have = {}; } }
+    var missing = ids.filter(function(id){ return !(have[id] && have[id].t); });
+    return inFours(missing, function(id){
+      return askTitle(id).then(function(t){
+        have[id] = { t: t, n: nOf[id] || (have[id] && have[id].n) || 0 };
+      });
+    }).then(function(){
+      // a clip already in the file still has its number refreshed, because this
+      // page can renumber a hand-added clip between one publish and the next
+      ids.forEach(function(id){
+        var e = have[id] || { t: "", n: 0 };
+        have[id] = { t: e.t || "", n: nOf[id] || e.n || 0 };
+      });
+      var keys = Object.keys(have).sort(), tidy = {};
+      keys.forEach(function(k){ tidy[k] = have[k]; });
+      var body = { message: "Titles for " + ids.length + " clips from the review page",
+                   content: b64(JSON.stringify(tidy, null, 0)), branch: BRANCH };
+      if(sha) body.sha = sha;
+      return gh("contents/titles.json", { method:"PUT", body: JSON.stringify(body) })
+        .then(function(r){
+          if(!r.ok) throw new Error("HTTP " + r.status);
+          return { wrote: ids.length, fetched: missing.length };
+        });
+    });
+  });
+}
+
 function pub(msg, colour, busy){
   pubMsg.style.color = colour === "bad" ? "var(--no)" : colour === "good" ? "var(--ok)" : "var(--dim)";
   stat(pubMsg, msg, busy);
@@ -2112,15 +2193,22 @@ bPublish.addEventListener("click", function(){
       });
     }).then(function(r){
       if(!r.ok) return r.text().then(function(x){ throw new Error("Publish failed (HTTP " + r.status + "). " + x.slice(0,120)); });
-      pub("Done \u2014 " + live + (live===1?" clip is":" clips are") + " on the site. Tidying old backups\u2026", "good", true);
+      pub("Done \u2014 " + live + (live===1?" clip is":" clips are") + " on the site. Fetching the names\u2026", "good", true);
       // the publish is already safe at this point; whatever happens next is
       // housekeeping and must not be reported as a failed publish
-      return pruneBackups().then(function(res){
-        var tail = !res ? " Could not check the backups folder."
-                 : res.removed ? (" Kept the " + KEEP_BACKUPS + " newest backups and removed " +
-                                  res.removed + " older " + (res.removed===1?"one.":"ones."))
-                 : " Backups are already down to the newest " + KEEP_BACKUPS + " or fewer.";
-        pub("Done \u2014 " + live + (live===1?" clip is":" clips are") + " on the site. Give GitHub a minute, then refresh the main page." + tail, "good");
+      return writeTitles(text).then(function(t){ return t; }, function(e){ return {err:String(e.message||e)}; })
+      .then(function(tres){
+        pub("Done \u2014 " + live + (live===1?" clip is":" clips are") + " on the site. Tidying old backups\u2026", "good", true);
+        return pruneBackups().then(function(res){
+          var tail = !res ? " Could not check the backups folder."
+                   : res.removed ? (" Kept the " + KEEP_BACKUPS + " newest backups and removed " +
+                                    res.removed + " older " + (res.removed===1?"one.":"ones."))
+                   : " Backups are already down to the newest " + KEEP_BACKUPS + " or fewer.";
+          var names = tres.err ? " The names could not be written (" + tres.err + ")."
+                    : tres.fetched ? (" Looked up " + tres.fetched + " new name" + (tres.fetched===1?"":"s") + " for titles.json.")
+                    : " titles.json already had every name.";
+          pub("Done \u2014 " + live + (live===1?" clip is":" clips are") + " on the site. Give GitHub a minute, then refresh the main page." + names + tail, "good");
+        });
       });
     });
   }).catch(function(e){
